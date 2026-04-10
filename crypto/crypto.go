@@ -33,6 +33,12 @@ func GetEtype(id int32) (etype.EType, error) {
 	case etypeID.RC4_HMAC:
 		var et RC4HMAC
 		return et, nil
+	case etypeID.CAMELLIA128_CTS_CMAC:
+		var et Camellia128CtsCmac
+		return et, nil
+	case etypeID.CAMELLIA256_CTS_CMAC:
+		var et Camellia256CtsCmac
+		return et, nil
 	default:
 		return nil, fmt.Errorf("unknown or unsupported EType: %d", id)
 	}
@@ -62,6 +68,12 @@ func GetChksumEtype(id int32) (etype.EType, error) {
 	// case chksumtype.KERB_CHECKSUM_HMAC_MD5_UNSIGNED:
 	//	var et RC4HMAC
 	//	return et, nil
+	case chksumtype.CMAC_CAMELLIA128:
+		var et Camellia128CtsCmac
+		return et, nil
+	case chksumtype.CMAC_CAMELLIA256:
+		var et Camellia256CtsCmac
+		return et, nil
 	default:
 		return nil, fmt.Errorf("unknown or unsupported checksum type: %d", id)
 	}

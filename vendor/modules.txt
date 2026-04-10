@@ -1,0 +1,42 @@
+# github.com/davecgh/go-spew v1.1.1
+## explicit
+github.com/davecgh/go-spew/spew
+# github.com/go-crypt/x v0.4.14
+## explicit; go 1.25.0
+github.com/go-crypt/x/pbkdf2
+# github.com/go-krb5/x v0.3.2
+## explicit; go 1.25.0
+github.com/go-krb5/x/aescts
+github.com/go-krb5/x/dns
+github.com/go-krb5/x/encoding/asn1
+github.com/go-krb5/x/identity
+github.com/go-krb5/x/internal/saferio
+github.com/go-krb5/x/rpc/mstypes
+github.com/go-krb5/x/rpc/ndr
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
+# github.com/gorilla/securecookie v1.1.2
+## explicit; go 1.20
+github.com/gorilla/securecookie
+# github.com/gorilla/sessions v1.4.0
+## explicit; go 1.23
+github.com/gorilla/sessions
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
+# github.com/stretchr/testify v1.11.1
+## explicit; go 1.17
+github.com/stretchr/testify/assert
+github.com/stretchr/testify/assert/yaml
+github.com/stretchr/testify/require
+# golang.org/x/crypto v0.50.0
+## explicit; go 1.25.0
+golang.org/x/crypto/md4
+golang.org/x/crypto/pbkdf2
+# golang.org/x/net v0.52.0
+## explicit; go 1.25.0
+golang.org/x/net/http2/hpack
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3

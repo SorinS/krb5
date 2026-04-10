@@ -106,7 +106,9 @@ const (
     "DefaultTGSEnctypeIDs": [
       18,
       17,
-      23
+      23,
+      26,
+      25
     ],
     "DefaultTktEnctypeIDs": [
       18,
@@ -140,7 +142,9 @@ const (
     "PermittedEnctypeIDs": [
       18,
       17,
-      23
+      23,
+      26,
+      25
     ],
     "PreferredPreauthTypes": [
       17,
