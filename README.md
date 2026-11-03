@@ -32,11 +32,25 @@ this is his org, and we're just the current stewards.
 * Client Side
   * Client that can authenticate to an SPNEGO Kerberos authenticated web service
   * Ability to change client's password
+* GSS-API (package `gsskrb5`)
+  * The Kerberos V5 mechanism on its own (RFC 4121): initiator and acceptor contexts, mutual authentication, channel
+    bindings, credential delegation (a forwarded TGT), MIC and Wrap tokens with sequence checks; tested against MIT's
+    gss-client and gss-server
+  * SASL GSSAPI (RFC 4752) with its security layers; usable with go-ldap's `GSSAPIBind`
+* LDAP (package `ldap`)
+  * A small LDAPv3 client for Kerberos's needs: SASL GSSAPI bind with signing or sealing, search, Who am I?, and Active
+    Directory's SID lookups and tokenGroups
+* PAC
+  * The KDC's signatures (KDC, ticket and full checksums) with the krbtgt key, the client info checked against the
+    ticket, claims compressed with MS-XCA LZ77+Huffman (package `pac/xpress`)
 * General
   * Kerberos libraries for custom integration
   * Parsing Keytab files
-  * Parsing krb5.conf files
-  * Parsing client credentials cache files such as `/tmp/krb5cc_$(id -u $(whoami))`
+  * Parsing krb5.conf files (as MIT reads them: includes, one-line realms, enctype families)
+  * Reading and writing credentials cache files such as `/tmp/krb5cc_$(id -u $(whoami))` (MIT's FILE format, which
+    MIT's and Heimdal's tools read), with the KDC time offset
+  * The client's clock corrected by the KDC's (kdc_timesync), as MIT does
+  * Camellia in constant time
 
 ## Support
 
@@ -127,7 +141,8 @@ The following section contains some implementation specific information.
 
 The following is working/tested:
 
-* Tested against MIT KDC (1.6.3 is the oldest version tested against) and Microsoft Active Directory (Windows 2008 R2)
+* Tested against MIT KDC (1.6.3 is the oldest version tested against; 1.22 on loopback with `test/mitkdc`) and Microsoft
+  Active Directory (Windows 2008 R2; Windows Server 2022 live, see `test/README.md`)
 * Tested against a KDC that supports PA-FX-FAST.
 * Tested against users that have pre-authentication required using PA-ENC-TIMESTAMP.
 * Microsoft PAC Authorization Data is processed and exposed in the HTTP request context. Available if Microsoft Active Directory is used as the KDC.
