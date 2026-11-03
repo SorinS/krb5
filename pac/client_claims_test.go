@@ -122,3 +122,38 @@ func TestPAC_ClientClaimsInfoMultiEntry_Unmarshal(t *testing.T) {
 	assert.Equal(t, []mstypes.LPWSTR{{Value: ClaimsEntryValueStr}}, k.ClaimsSet.ClaimsArrays[0].ClaimEntries[1].TypeString.Value)
 	assert.Equal(t, mstypes.CompressionFormatNone, k.ClaimsSetMetadata.CompressionFormat)
 }
+
+// go-krb5's one compressed claims vector (LZ77+Huffman), which it decoded
+// as HPACK's Huffman code and so could not read: the user's objectClass,
+// sAMAccountName and sAMAccountType, as the uncompressed vectors have them.
+func TestPAC_ClientClaimsInfoXPressHuff_Unmarshal(t *testing.T) {
+	t.Parallel()
+
+	b, err := hex.DecodeString(testdata.MarshaledPAC_ClientClaimsInfo_XPRESS_HUFF)
+	require.NoError(t, err)
+
+	var k ClientClaimsInfo
+
+	require.NoError(t, k.Unmarshal(b))
+	assert.Equal(t, mstypes.CompressionFormatXPressHuff, k.ClaimsSetMetadata.CompressionFormat)
+	require.Equal(t, uint32(1), k.ClaimsSet.ClaimsArrayCount)
+
+	a := k.ClaimsSet.ClaimsArrays[0]
+	assert.Equal(t, mstypes.ClaimsSourceTypeAD, a.ClaimsSourceType)
+	require.Len(t, a.ClaimEntries, 3)
+
+	assert.Equal(t, "ad://ext/objectClass:88d5de791e7b27e6", a.ClaimEntries[0].ID)
+	assert.Equal(t, mstypes.ClaimTypeIDUInt64, a.ClaimEntries[0].Type)
+	assert.Equal(t, []uint64{655369, 65543, 65542, 65536}, a.ClaimEntries[0].TypeUInt64.Value)
+
+	assert.Equal(t, "ad://ext/sAMAccountName:88d5d9085ea5c0c0", a.ClaimEntries[1].ID)
+	assert.Equal(t, mstypes.ClaimTypeIDString, a.ClaimEntries[1].Type)
+	assert.Equal(t, []mstypes.LPWSTR{{Value: "testuser1"}}, a.ClaimEntries[1].TypeString.Value)
+
+	assert.Equal(t, "ad://ext/sAMAccountType:88d5de79a7ecf8c7", a.ClaimEntries[2].ID)
+	assert.Equal(t, mstypes.ClaimTypeIDInt64, a.ClaimEntries[2].Type)
+	assert.Equal(t, []int64{0x30000000}, a.ClaimEntries[2].TypeInt64.Value)
+
+	// Cut short, the compressed set does not come to its size.
+	assert.Error(t, k.Unmarshal(b[:len(b)-40]))
+}
