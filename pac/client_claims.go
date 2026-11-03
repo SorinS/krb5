@@ -29,7 +29,7 @@ func (k *ClientClaimsInfo) Unmarshal(b []byte) (err error) {
 
 	k.ClaimsSetMetadata = *m
 
-	k.ClaimsSet, err = k.ClaimsSetMetadata.ClaimsSet()
+	k.ClaimsSet, err = claimsSet(&k.ClaimsSetMetadata)
 	if err != nil {
 		err = fmt.Errorf("error unmarshalling ClientClaimsInfo ClaimsSet: %w", err)
 	}
