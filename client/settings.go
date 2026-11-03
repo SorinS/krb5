@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"time"
+
+	"github.com/go-krb5/krb5/messages"
 )
 
 // Settings holds optional client settings.
@@ -13,6 +15,7 @@ type Settings struct {
 	disablePAFXFast         bool
 	assumePreAuthentication bool
 	preAuthEType            int32
+	preAuthError            *messages.KRBError // The KDC's PREAUTH_REQUIRED: its ETYPE-INFO2 gives the salt.
 	logger                  *log.Logger
 	dialer                  Dialer
 }

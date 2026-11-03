@@ -23,6 +23,15 @@ const (
 type Krberror struct {
 	RootCause string
 	EText     []string
+
+	// The error this one wraps, when made by Errorf from another error: a
+	// messages.KRBError from the KDC, say, which errors.As then finds.
+	inner error
+}
+
+// Unwrap returns the error this one wraps, if any.
+func (e Krberror) Unwrap() error {
+	return e.inner
 }
 
 // Error function to implement the error interface.
@@ -50,7 +59,10 @@ func Errorf(err error, et, format string, a ...any) Krberror {
 		return e
 	}
 
-	return NewErrorf(et, format+": %s", append(a, err)...)
+	e := NewErrorf(et, format+": %s", append(a, err)...)
+	e.inner = err
+
+	return e
 }
 
 // NewErrorf creates a new Krberror from a formatted string.

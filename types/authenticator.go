@@ -32,12 +32,18 @@ type Authenticator struct {
 
 // NewAuthenticator creates a new Authenticator.
 func NewAuthenticator(realm string, cname PrincipalName) (Authenticator, error) {
+	return NewAuthenticatorAt(realm, cname, time.Now())
+}
+
+// NewAuthenticatorAt creates a new Authenticator whose ctime is t (the
+// client's time, corrected by its offset from the KDC's).
+func NewAuthenticatorAt(realm string, cname PrincipalName, t time.Time) (Authenticator, error) {
 	seq, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {
 		return Authenticator{}, err
 	}
 
-	t := time.Now().UTC()
+	t = t.UTC()
 
 	return Authenticator{
 		AVNO:      iana.PVNO,

@@ -86,32 +86,50 @@ type KDCReqBody struct {
 
 // NewASReqForTGT generates a new KRB_AS_REQ struct for a TGT request.
 func NewASReqForTGT(realm string, c *config.Config, cname types.PrincipalName) (ASReq, error) {
+	return NewASReqForTGTAt(realm, c, cname, time.Now())
+}
+
+// NewASReqForTGTAt generates a new KRB_AS_REQ struct for a TGT request, at
+// the time now (the client's, corrected by its offset from the KDC's).
+func NewASReqForTGTAt(realm string, c *config.Config, cname types.PrincipalName, now time.Time) (ASReq, error) {
 	sname := types.PrincipalName{
 		NameType:   nametype.KRB_NT_SRV_INST,
 		NameString: []string{"krbtgt", realm},
 	}
 
-	return NewASReq(realm, c, cname, sname)
+	return NewASReqAt(realm, c, cname, sname, now)
 }
 
 // NewASReqForChgPasswd generates a new KRB_AS_REQ struct for a change password request.
 func NewASReqForChgPasswd(realm string, c *config.Config, cname types.PrincipalName) (ASReq, error) {
+	return NewASReqForChgPasswdAt(realm, c, cname, time.Now())
+}
+
+// NewASReqForChgPasswdAt is NewASReqForChgPasswd at the time now.
+func NewASReqForChgPasswdAt(realm string, c *config.Config, cname types.PrincipalName, now time.Time) (ASReq, error) {
 	sname := types.PrincipalName{
 		NameType:   nametype.KRB_NT_PRINCIPAL,
 		NameString: []string{"kadmin", "changepw"},
 	}
 
-	return NewASReq(realm, c, cname, sname)
+	return NewASReqAt(realm, c, cname, sname, now)
 }
 
 // NewASReq generates a new KRB_AS_REQ struct for a given SNAME.
 func NewASReq(realm string, c *config.Config, cname, sname types.PrincipalName) (ASReq, error) {
+	return NewASReqAt(realm, c, cname, sname, time.Now())
+}
+
+// NewASReqAt generates a new KRB_AS_REQ struct for a given SNAME, its
+// times from now (the client's time, corrected by its offset from the
+// KDC's).
+func NewASReqAt(realm string, c *config.Config, cname, sname types.PrincipalName, now time.Time) (ASReq, error) {
 	nonce, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 	if err != nil {
 		return ASReq{}, err
 	}
 
-	t := time.Now().UTC()
+	t := now.UTC()
 	// Copy the default options to make this thread safe.
 	kopts := types.NewKrbFlags()
 	copy(kopts.Bytes, c.LibDefaults.KDCDefaultOptions.Bytes)
@@ -172,38 +190,50 @@ func NewASReq(realm string, c *config.Config, cname, sname types.PrincipalName) 
 
 // NewTGSReq generates a new KRB_TGS_REQ struct.
 func NewTGSReq(cname types.PrincipalName, paRealm, kdcRealm string, c *config.Config, tgt Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool) (TGSReq, error) {
-	a, err := tgsReq(cname, sname, kdcRealm, renewal, c)
+	return NewTGSReqAt(cname, paRealm, kdcRealm, c, tgt, sessionKey, sname, renewal, time.Now())
+}
+
+// NewTGSReqAt generates a new KRB_TGS_REQ struct, its times and its
+// authenticator's from now (the client's time, corrected by its offset from
+// the KDC's).
+func NewTGSReqAt(cname types.PrincipalName, paRealm, kdcRealm string, c *config.Config, tgt Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool, now time.Time) (TGSReq, error) {
+	a, err := tgsReq(cname, sname, kdcRealm, renewal, c, now)
 	if err != nil {
 		return a, err
 	}
 
-	err = a.setPAData(paRealm, tgt, sessionKey)
+	err = a.setPAData(paRealm, tgt, sessionKey, now)
 
 	return a, err
 }
 
 // NewUser2UserTGSReq returns a TGS-REQ suitable for user-to-user authentication (https://tools.ietf.org/html/rfc4120#section-3.7)
 func NewUser2UserTGSReq(cname types.PrincipalName, kdcRealm string, c *config.Config, clientTGT Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool, verifyingTGT Ticket) (TGSReq, error) {
-	a, err := tgsReq(cname, sname, kdcRealm, renewal, c)
+	return NewUser2UserTGSReqAt(cname, kdcRealm, c, clientTGT, sessionKey, sname, renewal, verifyingTGT, time.Now())
+}
+
+// NewUser2UserTGSReqAt is NewUser2UserTGSReq at the time now.
+func NewUser2UserTGSReqAt(cname types.PrincipalName, kdcRealm string, c *config.Config, clientTGT Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool, verifyingTGT Ticket, now time.Time) (TGSReq, error) {
+	a, err := tgsReq(cname, sname, kdcRealm, renewal, c, now)
 	if err != nil {
 		return a, err
 	}
 
 	a.ReqBody.AdditionalTickets = []Ticket{verifyingTGT}
 	types.SetFlag(&a.ReqBody.KDCOptions, flags.EncTktInSkey)
-	err = a.setPAData(clientTGT.Realm, clientTGT, sessionKey)
+	err = a.setPAData(clientTGT.Realm, clientTGT, sessionKey, now)
 
 	return a, err
 }
 
 // tgsReq populates the fields for a TGS_REQ.
-func tgsReq(cname, sname types.PrincipalName, kdcRealm string, renewal bool, c *config.Config) (TGSReq, error) {
+func tgsReq(cname, sname types.PrincipalName, kdcRealm string, renewal bool, c *config.Config, now time.Time) (TGSReq, error) {
 	nonce, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 	if err != nil {
 		return TGSReq{}, err
 	}
 
-	t := time.Now().UTC()
+	t := now.UTC()
 
 	k := KDCReqFields{
 		PVNO:    iana.PVNO,
@@ -256,7 +286,7 @@ func tgsReq(cname, sname types.PrincipalName, kdcRealm string, renewal bool, c *
 	}, nil
 }
 
-func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.EncryptionKey) error {
+func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.EncryptionKey, now time.Time) error {
 	// Marshal the request and calculate checksum.
 	b, err := k.ReqBody.Marshal()
 	if err != nil {
@@ -275,7 +305,7 @@ func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 
 	// Form PAData for TGS_REQ
 	// Create authenticator.
-	auth, err := types.NewAuthenticator(paRealm, k.ReqBody.CName)
+	auth, err := types.NewAuthenticatorAt(paRealm, k.ReqBody.CName, now)
 	if err != nil {
 		return krberror.Errorf(err, krberror.KRBMsgError, "error generating new authenticator")
 	}

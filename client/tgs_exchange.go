@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/go-krb5/krb5/iana/errorcode"
 	"github.com/go-krb5/krb5/iana/flags"
 	"github.com/go-krb5/krb5/iana/nametype"
 	"github.com/go-krb5/krb5/krberror"
@@ -10,35 +11,71 @@ import (
 
 // TGSREQGenerateAndExchange generates the TGS_REQ and performs a TGS exchange to retrieve a ticket to the specified SPN.
 func (cl *Client) TGSREQGenerateAndExchange(spn types.PrincipalName, kdcRealm string, tgt messages.Ticket, sessionKey types.EncryptionKey, renewal bool) (tgsReq messages.TGSReq, tgsRep messages.TGSRep, err error) {
-	tgsReq, err = messages.NewTGSReq(cl.Credentials.CName(), cl.Credentials.Domain(), kdcRealm, cl.Config, tgt, sessionKey, spn, renewal)
+	tgsReq, err = messages.NewTGSReqAt(cl.Credentials.CName(), cl.Credentials.Domain(), kdcRealm, cl.Config, tgt, sessionKey, spn, renewal, cl.Now())
 	if err != nil {
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: failed to generate a new TGS_REQ")
 	}
 
-	return cl.TGSExchange(tgsReq, kdcRealm, tgsRep.Ticket, sessionKey, 0)
+	return cl.TGSExchange(tgsReq, kdcRealm, tgt, sessionKey, 0)
+}
+
+// newTGSReqLike makes a TGS_REQ for what tgsReq asks, with the TGT given
+// (a referral's, say) and the client's time now: user-to-user when tgsReq
+// is.
+func (cl *Client) newTGSReqLike(tgsReq messages.TGSReq, kdcRealm string, tgt messages.Ticket, sessionKey types.EncryptionKey) (messages.TGSReq, error) {
+	if types.IsFlagSet(&tgsReq.ReqBody.KDCOptions, flags.EncTktInSkey) && len(tgsReq.ReqBody.AdditionalTickets) > 0 {
+		return messages.NewUser2UserTGSReqAt(cl.Credentials.CName(), kdcRealm, cl.Config, tgt, sessionKey, tgsReq.ReqBody.SName,
+			tgsReq.Renewal, tgsReq.ReqBody.AdditionalTickets[0], cl.Now())
+	}
+
+	return messages.NewTGSReqAt(cl.Credentials.CName(), cl.Credentials.Domain(), kdcRealm, cl.Config, tgt, sessionKey,
+		tgsReq.ReqBody.SName, tgsReq.Renewal, cl.Now())
 }
 
 // TGSExchange exchanges the provided TGS_REQ with the KDC to retrieve a TGS_REP.
 // Referrals are automatically handled.
 // The client's cache is updated with the ticket received.
+// With kdc_timesync (MIT's default), a KRB_AP_ERR_SKEW error from the KDC
+// sets the client's clock offset from the error's time, and the request is
+// made again once, as MIT does. tgt is the ticket the request is made with.
 func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messages.Ticket, sessionKey types.EncryptionKey, referral int) (messages.TGSReq, messages.TGSRep, error) {
-	var tgsRep messages.TGSRep
+	var (
+		tgsRep    messages.TGSRep
+		r         []byte
+		skewFixed bool
+	)
 
-	b, err := tgsReq.Marshal()
-	if err != nil {
-		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to marshal TGS_REQ")
-	}
-
-	r, err := cl.sendToKDC(b, kdcRealm)
-	if err != nil {
-		if _, ok := err.(messages.KRBError); ok {
-			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KDCError, "TGS Exchange Error: kerberos error response from KDC when requesting for %s", tgsReq.ReqBody.SName.PrincipalNameString())
+	for {
+		b, err := tgsReq.Marshal()
+		if err != nil {
+			return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to marshal TGS_REQ")
 		}
 
-		return tgsReq, tgsRep, krberror.Errorf(err, krberror.NetworkingError, "TGS Exchange Error: issue sending TGS_REQ to KDC")
+		r, err = cl.sendToKDC(b, kdcRealm)
+		if err == nil {
+			break
+		}
+
+		e, ok := err.(messages.KRBError)
+		if !ok {
+			return tgsReq, tgsRep, krberror.Errorf(err, krberror.NetworkingError, "TGS Exchange Error: issue sending TGS_REQ to KDC")
+		}
+
+		if e.ErrorCode == errorcode.KRB_AP_ERR_SKEW && !skewFixed && cl.Config.LibDefaults.KDCTimeSync == 1 {
+			cl.syncTime(e.STime, e.Susec)
+			skewFixed = true
+
+			if tgsReq, err = cl.newTGSReqLike(tgsReq, kdcRealm, tgt, sessionKey); err != nil {
+				return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: failed to generate a new TGS_REQ")
+			}
+
+			continue
+		}
+
+		return tgsReq, tgsRep, krberror.Errorf(err, krberror.KDCError, "TGS Exchange Error: kerberos error response from KDC when requesting for %s", tgsReq.ReqBody.SName.PrincipalNameString())
 	}
 
-	err = tgsRep.Unmarshal(r)
+	err := tgsRep.Unmarshal(r)
 	if err != nil {
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to process the TGS_REP")
 	}
@@ -48,7 +85,7 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to process the TGS_REP")
 	}
 
-	if ok, err := tgsRep.Verify(cl.Config, tgsReq); !ok {
+	if ok, err := tgsRep.VerifyAt(cl.Config, tgsReq, cl.Now()); !ok {
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: TGS_REP is not valid")
 	}
 
@@ -62,14 +99,8 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		realm := tgsRep.Ticket.SName.NameString[len(tgsRep.Ticket.SName.NameString)-1]
 		referral++
 
-		if types.IsFlagSet(&tgsReq.ReqBody.KDCOptions, flags.EncTktInSkey) && len(tgsReq.ReqBody.AdditionalTickets) > 0 {
-			tgsReq, err = messages.NewUser2UserTGSReq(cl.Credentials.CName(), kdcRealm, cl.Config, tgt, sessionKey, tgsReq.ReqBody.SName, tgsReq.Renewal, tgsReq.ReqBody.AdditionalTickets[0])
-			if err != nil {
-				return tgsReq, tgsRep, err
-			}
-		}
-
-		tgsReq, err = messages.NewTGSReq(cl.Credentials.CName(), cl.Credentials.Domain(), realm, cl.Config, tgsRep.Ticket, tgsRep.DecryptedEncPart.Key, tgsReq.ReqBody.SName, tgsReq.Renewal)
+		// The same request (user-to-user too) to the referred realm, with its TGT.
+		tgsReq, err = cl.newTGSReqLike(tgsReq, realm, tgsRep.Ticket, tgsRep.DecryptedEncPart.Key)
 		if err != nil {
 			return tgsReq, tgsRep, err
 		}

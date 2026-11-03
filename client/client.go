@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-krb5/krb5/config"
@@ -28,6 +29,37 @@ type Client struct {
 	settings    *Settings
 	sessions    *sessions
 	cache       *Cache
+
+	// The KDC's clock less ours, in nanoseconds, learned from the KDC
+	// (kdc_timesync).
+	timeOffset atomic.Int64
+}
+
+// Now returns the client's time: the local clock corrected by the offset
+// learned from the KDC.
+func (cl *Client) Now() time.Time {
+	return time.Now().UTC().Add(time.Duration(cl.timeOffset.Load()))
+}
+
+// TimeOffset returns the KDC's clock less the local one, as the client has
+// learned it from the KDC (zero until it does): a KRB_AP_ERR_SKEW error's
+// time, or an AS reply's auth time, when kdc_timesync is on.
+func (cl *Client) TimeOffset() time.Duration {
+	return time.Duration(cl.timeOffset.Load())
+}
+
+// SetTimeOffset sets the KDC's clock less the local one (a credential
+// cache's KDC time offset, say).
+func (cl *Client) SetTimeOffset(d time.Duration) {
+	cl.timeOffset.Store(int64(d))
+}
+
+// syncTime takes the KDC's time t (and usec microseconds) as now.
+func (cl *Client) syncTime(t time.Time, usec int) {
+	kdc := t.Add(time.Duration(usec) * time.Microsecond)
+	d := kdc.Sub(time.Now())
+	cl.timeOffset.Store(int64(d))
+	cl.Log("clock offset from the KDC set to %v", d)
 }
 
 // NewWithPassword creates a new client from a password credential.
@@ -194,14 +226,14 @@ func (cl *Client) Login() error {
 			return krberror.Errorf(err, krberror.KRBMsgError, "no user credentials available and error getting any existing session")
 		}
 
-		if time.Now().UTC().After(endTime) {
+		if cl.Now().After(endTime) {
 			return krberror.New(krberror.KRBMsgError, "cannot login, no user credentials available and no valid existing session")
 		}
 		// no credentials but there is a session with tgt already.
 		return nil
 	}
 
-	ASReq, err := messages.NewASReqForTGT(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName())
+	ASReq, err := messages.NewASReqForTGTAt(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName(), cl.Now())
 	if err != nil {
 		return krberror.Errorf(err, krberror.KRBMsgError, "error generating new AS_REQ")
 	}
@@ -219,7 +251,7 @@ func (cl *Client) Login() error {
 // AffirmLogin will only perform an AS exchange with the KDC if the client does not already have a TGT.
 func (cl *Client) AffirmLogin() (err error) {
 	_, endTime, _, _, err := cl.sessionTimes(cl.Credentials.Domain())
-	if err != nil || time.Now().UTC().After(endTime) {
+	if err != nil || cl.Now().After(endTime) {
 		if err = cl.Login(); err != nil {
 			return fmt.Errorf("could not get valid TGT for client's realm: %w", err)
 		}
@@ -235,7 +267,7 @@ func (cl *Client) realmLogin(realm string) (err error) {
 	}
 
 	_, endTime, _, _, err := cl.sessionTimes(cl.Credentials.Domain())
-	if err != nil || time.Now().UTC().After(endTime) {
+	if err != nil || cl.Now().After(endTime) {
 		if err = cl.Login(); err != nil {
 			return fmt.Errorf("could not get valid TGT for client's realm: %w", err)
 		}
