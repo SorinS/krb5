@@ -28,8 +28,9 @@ ticket signatures. Its binaries are Homebrew's keg-only krb5
 --mit /usr, with krb5-kdc and krb5-admin-server installed); macOS's own
 kinit on the PATH is Heimdal's.
 
-DIR/env holds KRB5_CONFIG, TEST_MIT_DIR and the ports, as shell
-assignments. Ctrl-C (or SIGTERM) stops the KDCs.
+DIR/env holds KRB5_CONFIG, TEST_MIT_DIR, the ports and TEST_MIT_BIN (MIT's
+kinit, klist, kvno, for the tests that check what this module writes), as
+shell assignments. Ctrl-C (or SIGTERM) stops the KDCs.
 """
 
 import argparse
@@ -205,7 +206,8 @@ class Kdc:
             raise RuntimeError("krb5kdc did not start")
         with open(self.path("env"), "w") as f:
             f.write(f"KRB5_CONFIG={self.path('krb5.conf')}\nTEST_MIT_DIR={self.dir}\n"
-                    f"TEST_MIT_PORT_A={self.port_a}\nTEST_MIT_PORT_K={self.port_k}\nTEST_MIT_SKEW={SKEW}\n")
+                    f"TEST_MIT_PORT_A={self.port_a}\nTEST_MIT_PORT_K={self.port_k}\nTEST_MIT_SKEW={SKEW}\n"
+                    f"TEST_MIT_BIN={os.path.dirname(self.bin('klist'))}\n")
 
     def stop(self):
         for p in self.procs:

@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/go-krb5/x/encoding/asn1"
 
 	"github.com/go-krb5/krb5/config"
 	"github.com/go-krb5/krb5/credentials"
@@ -94,6 +97,7 @@ func NewWithKeytab(username, realm string, kt *keytab.Keytab, krb5conf *config.C
 }
 
 // NewFromCCache create a client from a populated client cache.
+// The cache's KDC time offset, if it has one, becomes the client's.
 //
 // WARNING: A client created from CCache does not automatically renew TGTs and a failure will occur after the TGT expires.
 func NewFromCCache(c *credentials.CCache, krb5conf *config.Config, settings ...func(*Settings)) (*Client, error) {
@@ -106,6 +110,11 @@ func NewFromCCache(c *credentials.CCache, krb5conf *config.Config, settings ...f
 		},
 		cache: NewCache(),
 	}
+
+	if d, ok := c.KDCOffset(); ok {
+		cl.SetTimeOffset(d)
+	}
+
 	spn := types.PrincipalName{
 		NameType:   nametype.KRB_NT_SRV_INST,
 		NameString: []string{"krbtgt", c.DefaultPrincipal.Realm},
@@ -126,6 +135,8 @@ func NewFromCCache(c *credentials.CCache, krb5conf *config.Config, settings ...f
 	cl.sessions.Entries[c.DefaultPrincipal.Realm] = &session{
 		realm:      c.DefaultPrincipal.Realm,
 		authTime:   cred.AuthTime,
+		startTime:  cred.StartTime,
+		flags:      cred.TicketFlags,
 		endTime:    cred.EndTime,
 		renewTill:  cred.RenewTill,
 		tgt:        tgt,
@@ -145,11 +156,107 @@ func NewFromCCache(c *credentials.CCache, krb5conf *config.Config, settings ...f
 			cred.StartTime,
 			cred.EndTime,
 			cred.RenewTill,
+			cred.TicketFlags,
 			cred.Key,
 		)
 	}
 
 	return cl, nil
+}
+
+// CCache returns a credential cache (MIT's FILE format, version 4) with the
+// client's TGTs, its own realm's first, and its service tickets, the KDC
+// time offset the client has learned in its header: what MIT's kinit and
+// kvno would leave, for MIT's and Heimdal's tools, or NewFromCCache, to use.
+func (cl *Client) CCache() (*credentials.CCache, error) {
+	client := credentials.Principal{Realm: cl.Credentials.Domain(), PrincipalName: cl.Credentials.CName()}
+	c := credentials.NewV4CCache(client.PrincipalName, client.Realm)
+
+	if d := cl.TimeOffset(); d != 0 {
+		c.SetKDCOffset(d)
+	}
+
+	cred := func(tkt messages.Ticket, key types.EncryptionKey, flags asn1.BitString, auth, start, end, renew time.Time) error {
+		b, err := tkt.Marshal()
+		if err != nil {
+			return err
+		}
+
+		c.AddCredential(&credentials.Credential{
+			Client:      client,
+			Server:      credentials.Principal{Realm: tkt.Realm, PrincipalName: tkt.SName},
+			Key:         key,
+			AuthTime:    auth,
+			StartTime:   start,
+			EndTime:     end,
+			RenewTill:   renew,
+			TicketFlags: flags,
+			Ticket:      b,
+		})
+
+		return nil
+	}
+
+	cl.sessions.mux.RLock()
+	realms := make([]string, 0, len(cl.sessions.Entries))
+
+	for r := range cl.sessions.Entries {
+		realms = append(realms, r)
+	}
+
+	cl.sessions.mux.RUnlock()
+	sort.Slice(realms, func(i, j int) bool {
+		if realms[i] == client.Realm || realms[j] == client.Realm {
+			return realms[i] == client.Realm && realms[j] != client.Realm
+		}
+
+		return realms[i] < realms[j]
+	})
+
+	for _, r := range realms {
+		s, ok := cl.sessions.get(r)
+		if !ok {
+			continue
+		}
+
+		s.mux.RLock()
+		err := cred(s.tgt, s.sessionKey, s.flags, s.authTime, s.startTime, s.endTime, s.renewTill)
+		s.mux.RUnlock()
+
+		if err != nil {
+			return nil, fmt.Errorf("TGT for %s: %w", r, err)
+		}
+	}
+
+	cl.cache.mux.RLock()
+	defer cl.cache.mux.RUnlock()
+
+	spns := make([]string, 0, len(cl.cache.Entries))
+	for spn := range cl.cache.Entries {
+		spns = append(spns, spn)
+	}
+
+	sort.Strings(spns)
+
+	for _, spn := range spns {
+		e := cl.cache.Entries[spn]
+		if err := cred(e.Ticket, e.SessionKey, e.Flags, e.AuthTime, e.StartTime, e.EndTime, e.RenewTill); err != nil {
+			return nil, fmt.Errorf("ticket for %s: %w", spn, err)
+		}
+	}
+
+	return c, nil
+}
+
+// SaveCCache writes the client's credential cache (CCache) to the file
+// path ("FILE:" prefix taken), mode 0600.
+func (cl *Client) SaveCCache(path string) error {
+	c, err := cl.CCache()
+	if err != nil {
+		return err
+	}
+
+	return c.Save(path)
 }
 
 // Key returns the client's encryption key for the specified encryption type and its kvno (kvno of zero will find latest).

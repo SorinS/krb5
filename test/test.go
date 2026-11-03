@@ -89,3 +89,16 @@ func ADLive(t *testing.T) (string, string) {
 
 	return dir, strings.TrimSpace(string(b))
 }
+
+// MITBin returns the directory of MIT's tools (kinit, klist, kvno) that
+// test/mitkdc/mitkdc.py found, skipping the test without it.
+func MITBin(t *testing.T) string {
+	t.Helper()
+
+	bin := os.Getenv("TEST_MIT_BIN")
+	if bin == "" {
+		t.Skip("Skipping: TEST_MIT_BIN is not set (see test/README.md)")
+	}
+
+	return bin
+}

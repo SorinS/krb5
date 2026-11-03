@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-krb5/x/encoding/asn1"
+
 	"github.com/go-krb5/krb5/messages"
 	"github.com/go-krb5/krb5/types"
 )
@@ -25,6 +27,7 @@ type CacheEntry struct {
 	StartTime  time.Time
 	EndTime    time.Time
 	RenewTill  time.Time
+	Flags      asn1.BitString      `json:"-"`
 	SessionKey types.EncryptionKey `json:"-"`
 }
 
@@ -72,7 +75,7 @@ func (c *Cache) JSON() (string, error) {
 }
 
 // addEntry adds a ticket to the cache.
-func (c *Cache) addEntry(tkt messages.Ticket, authTime, startTime, endTime, renewTill time.Time, sessionKey types.EncryptionKey) CacheEntry {
+func (c *Cache) addEntry(tkt messages.Ticket, authTime, startTime, endTime, renewTill time.Time, flags asn1.BitString, sessionKey types.EncryptionKey) CacheEntry {
 	spn := tkt.SName.PrincipalNameString()
 
 	c.mux.Lock()
@@ -85,6 +88,7 @@ func (c *Cache) addEntry(tkt messages.Ticket, authTime, startTime, endTime, rene
 		StartTime:  startTime,
 		EndTime:    endTime,
 		RenewTill:  renewTill,
+		Flags:      flags,
 		SessionKey: sessionKey,
 	}
 
