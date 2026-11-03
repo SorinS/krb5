@@ -105,6 +105,10 @@ func DES3DecryptData(key, data []byte, e etype.EType) ([]byte, error) {
 // DES3DecryptMessage decrypts the message provided using DES3 and methods specific to the etype provided.
 // The integrity of the message is also verified.
 func DES3DecryptMessage(key, ciphertext []byte, usage uint32, e etype.EType) ([]byte, error) {
+	if l := e.GetConfounderByteSize() + e.GetHMACBitLength()/8; len(ciphertext) < l {
+		return nil, fmt.Errorf("ciphertext of %d bytes is shorter than its confounder and checksum (%d)", len(ciphertext), l)
+	}
+
 	// Derive the key.
 	k, err := e.DeriveKey(key, common.GetUsageKe(usage))
 	if err != nil {
@@ -126,6 +130,10 @@ func DES3DecryptMessage(key, ciphertext []byte, usage uint32, e etype.EType) ([]
 // VerifyIntegrity verifies the integrity of cipertext bytes ct.
 func VerifyIntegrity(key, ct, pt []byte, usage uint32, etype etype.EType) bool {
 	h := make([]byte, etype.GetHMACBitLength()/8)
+	if len(ct) < etype.GetHMACBitLength()/8 {
+		return false
+	}
+
 	copy(h, ct[len(ct)-etype.GetHMACBitLength()/8:])
 	expectedMAC, _ := common.GetIntegrityHash(pt, key, usage, etype)
 

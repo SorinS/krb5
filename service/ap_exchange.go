@@ -29,7 +29,8 @@ func VerifyAPREQ(APReq *messages.APReq, s *Settings) (bool, *credentials.Credent
 			messages.NewKRBError(APReq.Ticket.SName, APReq.Ticket.Realm, errorcode.KRB_AP_ERR_REPEAT, "replay detected")
 	}
 
-	c := credentials.NewFromPrincipalName(APReq.Authenticator.CName, APReq.Authenticator.CRealm)
+	// The client is who the KDC sealed in the ticket, not who the authenticator says.
+	c := credentials.NewFromPrincipalName(APReq.Ticket.DecryptedEncPart.CName, APReq.Ticket.DecryptedEncPart.CRealm)
 	creds = c
 	creds.SetAuthTime(time.Now().UTC())
 	creds.SetAuthenticated(true)
