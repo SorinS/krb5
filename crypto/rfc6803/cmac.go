@@ -50,20 +50,16 @@ func cmacSubkeys(block cipher.Block) ([]byte, []byte) {
 	l := make([]byte, bs)
 	block.Encrypt(l, zeros)
 
+	// K1 = L << 1, and R_b (0x87 for a 128-bit block) added when L's top
+	// bit was set; K2 the same from K1. L is secret: the top bit makes a
+	// mask, not a branch.
 	k1 := make([]byte, bs)
 	shiftLeft(k1, l)
-
-	if l[0]&0x80 != 0 {
-		// R_b for 128-bit block cipher = 0x87
-		k1[bs-1] ^= 0x87
-	}
+	k1[bs-1] ^= 0x87 & -(l[0] >> 7)
 
 	k2 := make([]byte, bs)
 	shiftLeft(k2, k1)
-
-	if k1[0]&0x80 != 0 {
-		k2[bs-1] ^= 0x87
-	}
+	k2[bs-1] ^= 0x87 & -(k1[0] >> 7)
 
 	return k1, k2
 }

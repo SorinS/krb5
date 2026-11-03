@@ -112,8 +112,8 @@ The following section contains some implementation specific information.
 |  aes256-cts-hmac-sha384-192  |            Yes             |      20       |     20      |      [RFC8009]       |
 |           rc4-hmac           | Yes (deprecated, insecure) |      23       |    -138     | [RFC4757], [RFC8429] |
 |         rc4-hmac-exp         | No (deprecated, insecure)  |      24       |    -138     | [RFC4757], [RFC6649] |
-|     camellia128-cts-cmac     |             No             |      25       |     17      |      [RFC6803]       |
-|     camellia256-cts-cmac     |             No             |      25       |     18      |      [RFC6803]       |
+|     camellia128-cts-cmac     |    Yes (constant time)     |      25       |     17      |      [RFC6803]       |
+|     camellia256-cts-cmac     |    Yes (constant time)     |      26       |     18      |      [RFC6803]       |
 
 [RFC3961]: https://datatracker.ietf.org/doc/html/rfc3961
 [RFC3962]: https://datatracker.ietf.org/doc/html/rfc3962
