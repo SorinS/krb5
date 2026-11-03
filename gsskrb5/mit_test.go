@@ -396,3 +396,85 @@ func TestInitiatorAcceptor(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// SASL GSSAPI (RFC 4752), the client against our acceptor as the server:
+// the context, the server's offer of layers, the client's choice (the
+// strongest both take), then messages wrapped under it.
+func TestSASL(t *testing.T) {
+	m := newMIT(t)
+
+	cl := client.NewWithPassword("alice", "A.TEST", "alice-pw", m.cfg)
+	require.NoError(t, cl.Login())
+
+	for _, tc := range []struct {
+		offer, take, want byte
+	}{
+		{7, gsskrb5.LayerConfidentiality | gsskrb5.LayerIntegrity, gsskrb5.LayerConfidentiality},
+		{gsskrb5.LayerIntegrity | gsskrb5.LayerNone, 7, gsskrb5.LayerIntegrity},
+		{7, 0, gsskrb5.LayerNone},
+		{gsskrb5.LayerConfidentiality, gsskrb5.LayerNone, 0},
+	} {
+		s := gsskrb5.NewSASL(cl, tc.take)
+
+		tok, more, err := s.InitSecContext("host@svc.a.test", nil)
+		require.NoError(t, err)
+		require.True(t, more)
+
+		srv, rep, err := gsskrb5.Accept(tok, service.NewSettings(m.kt, service.DecodePAC(false)), gsskrb5.AcceptOptions{})
+		require.NoError(t, err)
+
+		_, more, err = s.InitSecContext("host@svc.a.test", rep)
+		require.NoError(t, err)
+		require.False(t, more)
+
+		offer, err := srv.Wrap([]byte{tc.offer, 0x00, 0x10, 0x00}, false)
+		require.NoError(t, err)
+
+		choice, err := s.NegotiateSaslAuth(offer, "u:alice")
+		if tc.want == 0 {
+			assert.Error(t, err, "no layer in common")
+			continue
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, tc.want, s.Layer())
+
+		c, _, err := srv.Unwrap(choice)
+		require.NoError(t, err)
+		assert.Equal(t, tc.want, c[0])
+		assert.Equal(t, "u:alice", string(c[4:]))
+
+		if tc.want == gsskrb5.LayerNone {
+			continue
+		}
+
+		assert.Equal(t, uint32(0x1000), s.MaxSend())
+
+		w, err := s.WrapMessage([]byte("an LDAP message"))
+		require.NoError(t, err)
+		assert.Equal(t, uint32(len(w)-4), binary.BigEndian.Uint32(w))
+
+		msg, sealed, err := srv.Unwrap(w[4:])
+		require.NoError(t, err)
+		assert.Equal(t, tc.want == gsskrb5.LayerConfidentiality, sealed)
+		assert.Equal(t, "an LDAP message", string(msg))
+
+		_, err = s.WrapMessage(make([]byte, 0x1000))
+		assert.Error(t, err, "larger than the server takes")
+
+		back, err := srv.Wrap([]byte("a reply"), tc.want == gsskrb5.LayerConfidentiality)
+		require.NoError(t, err)
+
+		got, err := s.UnwrapMessage(back)
+		require.NoError(t, err)
+		assert.Equal(t, "a reply", string(got))
+
+		if tc.want == gsskrb5.LayerConfidentiality {
+			plain, err := srv.Wrap([]byte("not sealed"), false)
+			require.NoError(t, err)
+
+			_, err = s.UnwrapMessage(plain)
+			assert.Error(t, err, "unsealed under the confidentiality layer")
+		}
+	}
+}
