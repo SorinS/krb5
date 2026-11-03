@@ -115,6 +115,7 @@ const (
       17
     ],
     "DNSCanonicalizeHostname": true,
+    "DNSCanonicalizeHostnameFallback": false,
     "DNSLookupKDC": false,
     "DNSLookupRealm": false,
     "ExtraAddresses": null,

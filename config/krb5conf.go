@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -88,6 +89,11 @@ type LibDefaults struct {
 
 	// DNSCanonicalizeHostname has a default value of true.
 	DNSCanonicalizeHostname bool
+
+	// DNSCanonicalizeHostnameFallback is dns_canonicalize_hostname =
+	// fallback: DNSCanonicalizeHostname is then false, and a name is to be
+	// canonicalized only when it fails as it is.
+	DNSCanonicalizeHostnameFallback bool
 
 	// DNSLookupKDC has a default value of false.
 	DNSLookupKDC bool
@@ -212,7 +218,7 @@ func (l *LibDefaults) parseLines(lines []string) error {
 			return InvalidErrorf("libdefaults section line (%s)", line)
 		}
 
-		p := strings.Split(line, "=")
+		p := strings.SplitN(line, "=", 2)
 
 		key := strings.TrimSpace(strings.ToLower(p[0]))
 		switch key {
@@ -257,12 +263,22 @@ func (l *LibDefaults) parseLines(lines []string) error {
 		case ConfigKeyDefaultTKTENCtypes:
 			l.DefaultTktEnctypes = strings.Fields(p[1])
 		case ConfigKeyDNSCanonicalizeHostname:
+			// MIT's "fallback" (Fedora's and RHEL's default): the name as
+			// it is first, canonicalized only when that fails.
+			if strings.EqualFold(strings.TrimSpace(p[1]), "fallback") {
+				l.DNSCanonicalizeHostname = false
+				l.DNSCanonicalizeHostnameFallback = true
+
+				continue
+			}
+
 			v, err := parseBoolean(p[1])
 			if err != nil {
 				return InvalidErrorf("libdefaults section line (%s): %v", line, err)
 			}
 
 			l.DNSCanonicalizeHostname = v
+			l.DNSCanonicalizeHostnameFallback = false
 		case ConfigKeyDNSLookupKDC:
 			v, err := parseBoolean(p[1])
 			if err != nil {
@@ -507,7 +523,7 @@ func (r *Realm) parseLines(name string, lines []string) (err error) {
 			}
 		}
 
-		p := strings.Split(line, "=")
+		p := strings.SplitN(line, "=", 2)
 		key := strings.TrimSpace(strings.ToLower(p[0]))
 		v := strings.TrimSpace(p[1])
 
@@ -546,12 +562,12 @@ func (r *Realm) parseLines(name string, lines []string) (err error) {
 // Parse the lines of the [realms] section of the configuration into an slice of Realm structs.
 func parseRealms(lines []string) (realms []Realm, err error) {
 	var (
-		name  string
-		start int
-		c     int
+		name string
+		body []string
+		c    int
 	)
 
-	for i, l := range lines {
+	for _, l := range lines {
 		if idx := strings.IndexAny(l, "#;"); idx != -1 {
 			l = l[:idx]
 		}
@@ -561,46 +577,75 @@ func parseRealms(lines []string) (realms []Realm, err error) {
 			continue
 		}
 
-		if strings.Contains(l, "{") {
-			c++
+		if c == 0 {
+			// A realm's opening line: NAME = { and maybe more, as MIT
+			// takes "A.TEST = { kdc = kdc.a.test }" on one line.
+			open := strings.Index(l, "{")
+			if open < 0 || !strings.Contains(l[:open], "=") {
+				if strings.Contains(l, "}") {
+					return nil, errors.New("invalid Realms section in configuration")
+				}
 
-			if !strings.Contains(l, "=") {
 				return nil, fmt.Errorf("realm configuration line invalid: %s", l)
 			}
 
-			if c == 1 {
-				start = i
-				p := strings.Split(l, "=")
-				name = strings.TrimSpace(p[0])
-			}
+			name = strings.TrimSpace(strings.SplitN(l[:open], "=", 2)[0])
+			body = nil
+			c = 1 // the opening brace, taken off the line
+			l = strings.TrimSpace(l[open+1:])
 		}
 
-		if strings.Contains(l, "}") {
-			if c < 1 {
-				// but not started a block!!!
-				return nil, errors.New("invalid Realms section in configuration")
-			}
+		// Where the realm's block ends on this line, if it does: the braces
+		// of subsections counted.
+		closed := -1
 
-			c--
-			if c == 0 {
-				var r Realm
-
-				e := r.parseLines(name, lines[start+1:i])
-				if e != nil {
-					if _, ok := e.(UnsupportedDirective); !ok {
-						err = e
-						return
-					}
-
-					err = e
+		for k := 0; k < len(l) && closed < 0; k++ {
+			switch l[k] {
+			case '{':
+				c++
+			case '}':
+				c--
+				if c == 0 {
+					closed = k
 				}
-
-				realms = append(realms, r)
 			}
 		}
+
+		if closed < 0 {
+			if l != "" {
+				body = append(body, l)
+			}
+
+			continue
+		}
+
+		if rest := strings.TrimSpace(l[:closed]); rest != "" {
+			body = append(body, rest)
+		}
+
+		if strings.TrimSpace(l[closed+1:]) != "" {
+			return nil, fmt.Errorf("realm configuration line invalid: %s", l)
+		}
+
+		var r Realm
+
+		e := r.parseLines(name, body)
+		if e != nil {
+			if _, ok := e.(UnsupportedDirective); !ok {
+				return nil, e
+			}
+
+			err = e
+		}
+
+		realms = append(realms, r)
 	}
 
-	return
+	if c != 0 {
+		return nil, errors.New("invalid Realms section in configuration: a realm's { is not closed")
+	}
+
+	return realms, err
 }
 
 // DomainRealm maps the domains to realms representing the [domain_realm] section of the configuration.
@@ -621,7 +666,7 @@ func (d *DomainRealm) parseLines(lines []string) error {
 			return InvalidErrorf("realm line (%s)", line)
 		}
 
-		p := strings.Split(line, "=")
+		p := strings.SplitN(line, "=", 2)
 		domain := strings.TrimSpace(strings.ToLower(p[0]))
 		realm := strings.TrimSpace(p[1])
 		d.addMapping(domain, realm)
@@ -662,17 +707,91 @@ func (c *Config) ResolveRealm(domainName string) string {
 	return ""
 }
 
-// Load the KRB5 configuration from the specified file path.
+// Load the KRB5 configuration from the specified file path. Its include
+// and includedir directives are followed as MIT's profile library does:
+// include FILE reads FILE (an absolute path) in place; includedir DIR
+// reads the files of DIR whose names are letters, digits, dashes and
+// underscores only, or end in ".conf", in name order.
 func Load(cfgPath string) (*Config, error) {
-	fh, err := os.Open(cfgPath)
+	text, err := readWithIncludes(cfgPath, 0)
 	if err != nil {
-		return nil, errors.New("configuration file could not be opened: " + cfgPath + " " + err.Error())
+		return nil, err
 	}
-	defer fh.Close()
 
-	scanner := bufio.NewScanner(fh)
+	return NewFromString(text)
+}
 
-	return NewFromScanner(scanner)
+// maxIncludeDepth bounds include within include (and catches a loop).
+const maxIncludeDepth = 10
+
+func readWithIncludes(cfgPath string, depth int) (string, error) {
+	if depth > maxIncludeDepth {
+		return "", errors.New("configuration includes nested too deep: " + cfgPath)
+	}
+
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return "", errors.New("configuration file could not be opened: " + cfgPath + " " + err.Error())
+	}
+
+	var out strings.Builder
+
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+
+		switch {
+		case strings.HasPrefix(t, "include ") || strings.HasPrefix(t, "include\t"):
+			inc, err := readWithIncludes(strings.TrimSpace(t[len("include"):]), depth+1)
+			if err != nil {
+				return "", err
+			}
+
+			out.WriteString(inc)
+			out.WriteString("\n")
+		case strings.HasPrefix(t, "includedir ") || strings.HasPrefix(t, "includedir\t"):
+			dir := strings.TrimSpace(t[len("includedir"):])
+
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				return "", errors.New("configuration directory could not be read: " + dir + " " + err.Error())
+			}
+
+			for _, e := range entries {
+				if e.IsDir() || !includedName(e.Name()) {
+					continue
+				}
+
+				inc, err := readWithIncludes(filepath.Join(dir, e.Name()), depth+1)
+				if err != nil {
+					return "", err
+				}
+
+				out.WriteString(inc)
+				out.WriteString("\n")
+			}
+		default:
+			out.WriteString(line)
+			out.WriteString("\n")
+		}
+	}
+
+	return out.String(), nil
+}
+
+// includedName: the files includedir reads (MIT's profile library: no
+// editor backups, no dot files, no package manager leftovers).
+func includedName(name string) bool {
+	if strings.HasSuffix(name, ".conf") && !strings.HasPrefix(name, ".") {
+		return true
+	}
+
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+
+	return name != ""
 }
 
 // NewFromString creates a new Config struct from a string.
@@ -784,32 +903,88 @@ func NewFromScanner(scanner *bufio.Scanner) (*Config, error) {
 func parseETypes(s []string, w bool) []int32 {
 	var eti []int32
 
-	for _, et := range s {
-		if !w {
-			var weak bool
-
-			for _, wet := range strings.Fields(WeakETypeList) {
-				if et == wet {
-					weak = true
-					break
-				}
-			}
-
-			if weak {
-				continue
+	add := func(id int32) {
+		for _, e := range eti {
+			if e == id {
+				return
 			}
 		}
 
-		i := etypeID.EtypeSupported(et)
-		if i != 0 {
-			eti = append(eti, i)
+		eti = append(eti, id)
+	}
+
+	remove := func(id int32) {
+		for k, e := range eti {
+			if e == id {
+				eti = append(eti[:k], eti[k+1:]...)
+				return
+			}
+		}
+	}
+
+	for _, et := range s {
+		// MIT's names are not case-sensitive ("AES256-CTS"); "-name" drops
+		// a type from the list so far, "+name" adds one.
+		et = strings.ToLower(et)
+
+		drop := strings.HasPrefix(et, "-")
+		et = strings.TrimLeft(et, "+-")
+
+		var ids []int32
+
+		switch et {
+		case "default":
+			ids = parseETypes(newLibDefaults().DefaultTktEnctypes, w)
+		default:
+			if family, ok := etypeFamilies[et]; ok {
+				ids = family
+				break
+			}
+
+			if !w {
+				var weak bool
+
+				for _, wet := range strings.Fields(WeakETypeList) {
+					if et == wet {
+						weak = true
+						break
+					}
+				}
+
+				if weak {
+					continue
+				}
+			}
+
+			if i := etypeID.EtypeSupported(et); i != 0 {
+				ids = []int32{i}
+			}
+		}
+
+		for _, id := range ids {
+			if drop {
+				remove(id)
+			} else {
+				add(id)
+			}
 		}
 	}
 
 	return eti
 }
 
-// Parse a time duration string in the configuration to a golang time.Duration.
+// etypeFamilies are MIT's names for families of encryption types in
+// krb5.conf's lists (krb5_init_context's enctype list syntax).
+var etypeFamilies = map[string][]int32{
+	"aes": {etypeID.AES256_CTS_HMAC_SHA1_96, etypeID.AES128_CTS_HMAC_SHA1_96, etypeID.AES256_CTS_HMAC_SHA384_192,
+		etypeID.AES128_CTS_HMAC_SHA256_128},
+	"aes-sha1": {etypeID.AES256_CTS_HMAC_SHA1_96, etypeID.AES128_CTS_HMAC_SHA1_96},
+	"aes-sha2": {etypeID.AES256_CTS_HMAC_SHA384_192, etypeID.AES128_CTS_HMAC_SHA256_128},
+	"camellia": {etypeID.CAMELLIA256_CTS_CMAC, etypeID.CAMELLIA128_CTS_CMAC},
+	"rc4":      {etypeID.RC4_HMAC},
+	"des3":     {etypeID.DES3_CBC_SHA1_KD},
+}
+
 func parseDuration(s string) (time.Duration, error) {
 	s = strings.ReplaceAll(strings.TrimSpace(s), " ", "")
 
