@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-krb5/x/encoding/asn1"
+
 	"github.com/go-krb5/krb5/iana/nametype"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
@@ -70,6 +72,8 @@ func (s *sessions) get(realm string) (*session, bool) {
 type session struct {
 	realm                string
 	authTime             time.Time
+	startTime            time.Time
+	flags                asn1.BitString
 	endTime              time.Time
 	renewTill            time.Time
 	tgt                  messages.Ticket
@@ -100,6 +104,8 @@ func (cl *Client) addSession(tgt messages.Ticket, dep messages.EncKDCRepPart) {
 	s := &session{
 		realm:                realm,
 		authTime:             dep.AuthTime,
+		startTime:            dep.StartTime,
+		flags:                dep.Flags,
 		endTime:              dep.EndTime,
 		renewTill:            dep.RenewTill,
 		tgt:                  tgt,
@@ -117,6 +123,8 @@ func (s *session) update(tgt messages.Ticket, dep messages.EncKDCRepPart) {
 	defer s.mux.Unlock()
 
 	s.authTime = dep.AuthTime
+	s.startTime = dep.StartTime
+	s.flags = dep.Flags
 	s.endTime = dep.EndTime
 	s.renewTill = dep.RenewTill
 	s.tgt = tgt

@@ -1,21 +1,27 @@
 package credentials
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/go-krb5/x/encoding/asn1"
 
+	"github.com/go-krb5/krb5/iana/nametype"
 	"github.com/go-krb5/krb5/types"
 )
 
 const (
 	headerFieldTagKDCOffset = 1
+
+	// The realm and first name component of a cache's configuration
+	// entries (MIT's krb5_cc_set_config).
+	configRealm  = "X-CACHECONF:"
+	configPrefix = "krb5_ccache_conf_data"
 )
 
 // CCache is the file credentials cache as define here: https://web.mit.edu/kerberos/krb5-latest/doc/formats/ccache_file_format.html
@@ -38,11 +44,14 @@ type headerField struct {
 	value  []byte
 }
 
-// Credential cache entry principal struct.
-type principal struct {
+// Principal is a credential cache's principal: a name and its realm.
+type Principal struct {
 	Realm         string
 	PrincipalName types.PrincipalName
 }
+
+// Credential cache entry principal struct.
+type principal = Principal
 
 // Credential holds a Kerberos client's ccache credential information.
 type Credential struct {
@@ -75,70 +84,149 @@ func LoadCCache(cpath string) (*CCache, error) {
 	}
 
 	err = c.Unmarshal(b)
+	c.Path = cpath
 
 	return c, err
 }
 
+// NewV4CCache returns an empty credential cache, of version 4 (MIT's
+// default), for the client cname in realm.
+func NewV4CCache(cname types.PrincipalName, realm string) *CCache {
+	return &CCache{
+		Version:          4,
+		DefaultPrincipal: Principal{Realm: realm, PrincipalName: cname},
+	}
+}
+
+// reader reads a cache's bytes, remembering the first error: past the end,
+// every read gives zero values.
+type reader struct {
+	b   []byte
+	p   int
+	e   binary.ByteOrder
+	err error
+}
+
+func (r *reader) bytes(n int) []byte {
+	if r.err != nil {
+		return nil
+	}
+
+	if n < 0 || n > len(r.b)-r.p {
+		r.err = fmt.Errorf("invalid credential cache data: %d bytes wanted at %d of %d", n, r.p, len(r.b))
+		return nil
+	}
+
+	v := make([]byte, n)
+	copy(v, r.b[r.p:r.p+n])
+	r.p += n
+
+	return v
+}
+
+func (r *reader) u8() uint8 {
+	if b := r.bytes(1); b != nil {
+		return b[0]
+	}
+
+	return 0
+}
+
+func (r *reader) u16() uint16 {
+	if b := r.bytes(2); b != nil {
+		return r.e.Uint16(b)
+	}
+
+	return 0
+}
+
+func (r *reader) u32() uint32 {
+	if b := r.bytes(4); b != nil {
+		return r.e.Uint32(b)
+	}
+
+	return 0
+}
+
+// data reads a counted octet string.
+func (r *reader) data() []byte {
+	n := r.u32()
+	if n > uint32(len(r.b)) {
+		r.err = fmt.Errorf("invalid credential cache data: a length of %d", n)
+		return nil
+	}
+
+	return r.bytes(int(n))
+}
+
+// time reads a timestamp: seconds since the epoch, unsigned (MIT's
+// krb5_timestamp read as such, so past 2038).
+func (r *reader) time() time.Time {
+	return time.Unix(int64(r.u32()), 0)
+}
+
 // Unmarshal a byte slice of credential cache data into CCache type.
 func (c *CCache) Unmarshal(b []byte) error {
-	p := 0
-
-	if int8(b[p]) != 5 {
+	if len(b) < 2 || b[0] != 5 {
 		return errors.New("Invalid credential cache data. First byte does not equal 5")
 	}
 
-	p++
-
-	c.Version = b[p]
+	c.Version = b[1]
 	if c.Version < 1 || c.Version > 4 {
 		return errors.New("Invalid credential cache data. Keytab version is not within 1 to 4")
 	}
 
-	p++
-
-	var endian binary.ByteOrder
-
-	endian = binary.BigEndian
-	if (c.Version == 1 || c.Version == 2) && isNativeEndianLittle() {
-		endian = binary.LittleEndian
+	// Versions 1 and 2 are in the writer's byte order, which MIT took to be
+	// the reader's too; 3 and 4 are big-endian.
+	r := &reader{b: b, p: 2, e: binary.BigEndian}
+	if c.Version == 1 || c.Version == 2 {
+		r.e = binary.NativeEndian
 	}
 
+	c.Header = header{}
+	c.Credentials = nil
+
 	if c.Version == 4 {
-		err := parseHeader(b, &p, c, &endian)
-		if err != nil {
+		if err := parseHeader(r, c); err != nil {
 			return err
 		}
 	}
 
-	c.DefaultPrincipal = parsePrincipal(b, &p, c, &endian)
-	for p < len(b) {
-		cred, err := parseCredential(b, &p, c, &endian)
-		if err != nil {
-			return err
+	c.DefaultPrincipal = parsePrincipal(r, c)
+	for r.err == nil && r.p < len(b) {
+		cred := parseCredential(r, c)
+		if r.err != nil {
+			break
 		}
 
 		c.Credentials = append(c.Credentials, cred)
 	}
 
-	return nil
+	return r.err
 }
 
-func parseHeader(b []byte, p *int, c *CCache, e *binary.ByteOrder) error {
+// parseHeader reads a version 4 cache's header: tagged fields, of which MIT
+// defines only the KDC time offset (tag 1); others are kept, unread.
+func parseHeader(r *reader, c *CCache) error {
 	if c.Version != 4 {
 		return errors.New("Credentials cache version is not 4 so there is no header to parse.")
 	}
 
-	h := header{}
+	h := header{length: r.u16()}
+	end := r.p + int(h.length)
 
-	h.length = uint16(readInt16(b, p, e))
-	for *p <= int(h.length) {
-		f := headerField{}
-		f.tag = uint16(readInt16(b, p, e))
-		f.length = uint16(readInt16(b, p, e))
-		f.value = b[*p : *p+int(f.length)]
+	if end > len(r.b) {
+		return errors.New("Invalid credential cache header: longer than the cache")
+	}
 
-		*p += int(f.length)
-		if !f.valid() {
+	for r.err == nil && r.p < end {
+		f := headerField{tag: r.u16(), length: r.u16()}
+		if r.p+int(f.length) > end {
+			return errors.New("Invalid credential cache header found")
+		}
+
+		f.value = r.bytes(int(f.length))
+		if f.tag == headerFieldTagKDCOffset && !f.valid() {
 			return errors.New("Invalid credential cache header found")
 		}
 
@@ -147,77 +235,351 @@ func parseHeader(b []byte, p *int, c *CCache, e *binary.ByteOrder) error {
 
 	c.Header = h
 
-	return nil
+	return r.err
 }
 
-// Parse the Keytab bytes of a principal into a Keytab entry's principal.
-func parsePrincipal(b []byte, p *int, c *CCache, e *binary.ByteOrder) (princ principal) {
+// parsePrincipal reads a principal.
+func parsePrincipal(r *reader, c *CCache) (princ principal) {
 	if c.Version != 1 {
 		// Name Type is omitted in version 1.
-		princ.PrincipalName.NameType = readInt32(b, p, e)
+		princ.PrincipalName.NameType = int32(r.u32())
 	}
 
-	nc := int(readInt32(b, p, e))
+	nc := int(r.u32())
 	if c.Version == 1 {
 		// In version 1 the number of components includes the realm. Minus 1 to make consistent with version 2.
 		nc--
 	}
 
-	lenRealm := readInt32(b, p, e)
+	if nc < 0 || nc > len(r.b) {
+		r.err = fmt.Errorf("invalid credential cache data: %d name components", nc)
+		return princ
+	}
 
-	princ.Realm = string(readBytes(b, p, int(lenRealm), e))
-	for i := 0; i < nc; i++ {
-		l := readInt32(b, p, e)
-		princ.PrincipalName.NameString = append(princ.PrincipalName.NameString, string(readBytes(b, p, int(l), e)))
+	princ.Realm = string(r.data())
+	for i := 0; i < nc && r.err == nil; i++ {
+		princ.PrincipalName.NameString = append(princ.PrincipalName.NameString, string(r.data()))
 	}
 
 	return princ
 }
 
-func parseCredential(b []byte, p *int, c *CCache, e *binary.ByteOrder) (cred *Credential, err error) {
-	cred = new(Credential)
-	cred.Client = parsePrincipal(b, p, c, e)
-	cred.Server = parsePrincipal(b, p, c, e)
-	key := types.EncryptionKey{}
+// parseCredential reads a credential.
+func parseCredential(r *reader, c *CCache) *Credential {
+	cred := new(Credential)
+	cred.Client = parsePrincipal(r, c)
+	cred.Server = parsePrincipal(r, c)
 
-	key.KeyType = int32(readInt16(b, p, e))
+	cred.Key.KeyType = int32(int16(r.u16()))
 	if c.Version == 3 {
-		key.KeyType = int32(readInt16(b, p, e))
+		// Version 3 has the key's enctype twice.
+		cred.Key.KeyType = int32(int16(r.u16()))
 	}
 
-	key.KeyValue = readData(b, p, e)
-	cred.Key = key
-	cred.AuthTime = readTimestamp(b, p, e)
-	cred.StartTime = readTimestamp(b, p, e)
-	cred.EndTime = readTimestamp(b, p, e)
-
-	cred.RenewTill = readTimestamp(b, p, e)
-	if ik := readInt8(b, p, e); ik == 0 {
-		cred.IsSKey = false
-	} else {
-		cred.IsSKey = true
-	}
+	cred.Key.KeyValue = r.data()
+	cred.AuthTime = r.time()
+	cred.StartTime = r.time()
+	cred.EndTime = r.time()
+	cred.RenewTill = r.time()
+	cred.IsSKey = r.u8() != 0
 
 	cred.TicketFlags = types.NewKrbFlags()
-	cred.TicketFlags.Bytes = readBytes(b, p, 4, e)
-	l := int(readInt32(b, p, e))
-
-	cred.Addresses = make([]types.HostAddress, l)
-	for i := range cred.Addresses {
-		cred.Addresses[i] = readAddress(b, p, e)
+	if f := r.bytes(4); f != nil {
+		cred.TicketFlags.Bytes = f
 	}
 
-	l = int(readInt32(b, p, e))
-
-	cred.AuthData = make([]types.AuthorizationDataEntry, l)
-	for i := range cred.AuthData {
-		cred.AuthData[i] = readAuthDataEntry(b, p, e)
+	n := r.u32()
+	if n > uint32(len(r.b)) {
+		r.err = fmt.Errorf("invalid credential cache data: %d addresses", n)
+		return cred
 	}
 
-	cred.Ticket = readData(b, p, e)
-	cred.SecondTicket = readData(b, p, e)
+	cred.Addresses = make([]types.HostAddress, 0, n)
+	for i := uint32(0); i < n && r.err == nil; i++ {
+		a := types.HostAddress{AddrType: int32(int16(r.u16()))}
+		a.Address = r.data()
+		cred.Addresses = append(cred.Addresses, a)
+	}
 
-	return cred, nil
+	n = r.u32()
+	if n > uint32(len(r.b)) {
+		r.err = fmt.Errorf("invalid credential cache data: %d authorization data entries", n)
+		return cred
+	}
+
+	cred.AuthData = make([]types.AuthorizationDataEntry, 0, n)
+	for i := uint32(0); i < n && r.err == nil; i++ {
+		a := types.AuthorizationDataEntry{ADType: int32(int16(r.u16()))}
+		a.ADData = r.data()
+		cred.AuthData = append(cred.AuthData, a)
+	}
+
+	cred.Ticket = r.data()
+	cred.SecondTicket = r.data()
+
+	return cred
+}
+
+// writer builds a cache's bytes, big-endian (versions 3 and 4).
+type writer struct {
+	b []byte
+}
+
+func (w *writer) u8(v uint8)   { w.b = append(w.b, v) }
+func (w *writer) u16(v uint16) { w.b = binary.BigEndian.AppendUint16(w.b, v) }
+func (w *writer) u32(v uint32) { w.b = binary.BigEndian.AppendUint32(w.b, v) }
+
+func (w *writer) data(d []byte) {
+	w.u32(uint32(len(d)))
+	w.b = append(w.b, d...)
+}
+
+func (w *writer) time(t time.Time) {
+	if t.IsZero() || t.Unix() <= 0 {
+		w.u32(0)
+		return
+	}
+
+	w.u32(uint32(t.Unix()))
+}
+
+func (w *writer) principal(p principal) {
+	w.u32(uint32(p.PrincipalName.NameType))
+	w.u32(uint32(len(p.PrincipalName.NameString)))
+	w.data([]byte(p.Realm))
+
+	for _, s := range p.PrincipalName.NameString {
+		w.data([]byte(s))
+	}
+}
+
+// Marshal the cache in MIT's FILE format: version 4, unless the cache is
+// of version 3 (versions 1 and 2, in the host's byte order, are read but
+// not written). A version 4 cache always has the KDC time offset field,
+// zero when unset, as MIT writes it.
+func (c *CCache) Marshal() ([]byte, error) {
+	version := c.Version
+	if version == 0 {
+		version = 4
+	}
+
+	if version != 3 && version != 4 {
+		return nil, fmt.Errorf("credential cache version %d is not written: only 3 and 4", version)
+	}
+
+	w := &writer{b: []byte{5, version}}
+
+	if version == 4 {
+		fields := c.Header.fields
+		if !c.hasHeaderField(headerFieldTagKDCOffset) {
+			fields = append([]headerField{{tag: headerFieldTagKDCOffset, length: 8, value: make([]byte, 8)}}, fields...)
+		}
+
+		var h writer
+		for _, f := range fields {
+			h.u16(f.tag)
+			h.u16(uint16(len(f.value)))
+			h.b = append(h.b, f.value...)
+		}
+
+		if len(h.b) > 0xffff {
+			return nil, errors.New("credential cache header too long")
+		}
+
+		w.u16(uint16(len(h.b)))
+		w.b = append(w.b, h.b...)
+	}
+
+	w.principal(c.DefaultPrincipal)
+
+	for _, cred := range c.Credentials {
+		w.principal(cred.Client)
+		w.principal(cred.Server)
+		w.u16(uint16(cred.Key.KeyType))
+
+		if version == 3 {
+			w.u16(uint16(cred.Key.KeyType))
+		}
+
+		w.data(cred.Key.KeyValue)
+		w.time(cred.AuthTime)
+		w.time(cred.StartTime)
+		w.time(cred.EndTime)
+		w.time(cred.RenewTill)
+
+		if cred.IsSKey {
+			w.u8(1)
+		} else {
+			w.u8(0)
+		}
+
+		flags := make([]byte, 4)
+		copy(flags, cred.TicketFlags.Bytes)
+		w.b = append(w.b, flags...)
+
+		w.u32(uint32(len(cred.Addresses)))
+		for _, a := range cred.Addresses {
+			w.u16(uint16(a.AddrType))
+			w.data(a.Address)
+		}
+
+		w.u32(uint32(len(cred.AuthData)))
+		for _, a := range cred.AuthData {
+			w.u16(uint16(a.ADType))
+			w.data(a.ADData)
+		}
+
+		w.data(cred.Ticket)
+		w.data(cred.SecondTicket)
+	}
+
+	return w.b, nil
+}
+
+// Save writes the cache to the file path (FILE: stripped), readable and
+// writable by its owner only, as MIT makes it: to a new file in the same
+// directory, renamed over the old.
+func (c *CCache) Save(path string) error {
+	path = strings.TrimPrefix(path, "FILE:")
+
+	b, err := c.Marshal()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+
+	tmp := f.Name()
+
+	if err = f.Chmod(0o600); err == nil {
+		if _, err = f.Write(b); err == nil {
+			err = f.Sync()
+		}
+	}
+
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	c.Path = path
+
+	return nil
+}
+
+func (c *CCache) hasHeaderField(tag uint16) bool {
+	for _, f := range c.Header.fields {
+		if f.tag == tag {
+			return true
+		}
+	}
+
+	return false
+}
+
+// KDCOffset returns the KDC's time offset the cache records (version 4):
+// the KDC's clock less the client's, and whether the cache has it set.
+func (c *CCache) KDCOffset() (time.Duration, bool) {
+	for _, f := range c.Header.fields {
+		if f.tag == headerFieldTagKDCOffset && len(f.value) == 8 {
+			sec := int32(binary.BigEndian.Uint32(f.value[:4]))
+			usec := int32(binary.BigEndian.Uint32(f.value[4:]))
+			d := time.Duration(sec)*time.Second + time.Duration(usec)*time.Microsecond
+
+			return d, d != 0
+		}
+	}
+
+	return 0, false
+}
+
+// SetKDCOffset records the KDC's time offset in the cache's header (the
+// KDC's clock less the client's), as MIT keeps it for kdc_timesync.
+func (c *CCache) SetKDCOffset(d time.Duration) {
+	v := make([]byte, 8)
+	sec := d / time.Second
+	usec := (d % time.Second) / time.Microsecond
+
+	if usec < 0 {
+		sec--
+		usec += 1000000
+	}
+
+	binary.BigEndian.PutUint32(v[:4], uint32(int32(sec)))
+	binary.BigEndian.PutUint32(v[4:], uint32(int32(usec)))
+
+	for i, f := range c.Header.fields {
+		if f.tag == headerFieldTagKDCOffset {
+			c.Header.fields[i].value = v
+			c.Header.fields[i].length = 8
+
+			return
+		}
+	}
+
+	c.Header.fields = append([]headerField{{tag: headerFieldTagKDCOffset, length: 8, value: v}}, c.Header.fields...)
+}
+
+// AddCredential puts the credential in the cache, in place of one for the
+// same client and server (as MIT's krb5_cc_store_cred does).
+func (c *CCache) AddCredential(cred *Credential) {
+	for i, old := range c.Credentials {
+		if old.Server.Realm == cred.Server.Realm && old.Server.PrincipalName.Equal(cred.Server.PrincipalName) &&
+			old.Client.Realm == cred.Client.Realm && old.Client.PrincipalName.Equal(cred.Client.PrincipalName) {
+			c.Credentials[i] = cred
+			return
+		}
+	}
+
+	c.Credentials = append(c.Credentials, cred)
+}
+
+// configServer is the server principal of a configuration entry for key
+// (and the principal it is about, if any): krb5_ccache_conf_data/key[/principal]@X-CACHECONF:.
+func configServer(key, principal string) Principal {
+	names := []string{configPrefix, key}
+	if principal != "" {
+		names = append(names, principal)
+	}
+
+	return Principal{Realm: configRealm, PrincipalName: types.PrincipalName{NameType: nametype.KRB_NT_PRINCIPAL, NameString: names}}
+}
+
+// SetConfig sets a configuration entry, as MIT's krb5_cc_set_config does:
+// key ("fast_avail", "pa_type", ...) about the principal (its unparsed
+// name, as "krbtgt/EXAMPLE.COM@EXAMPLE.COM", or "" for the cache as a
+// whole), with the value.
+func (c *CCache) SetConfig(key, principal string, value []byte) {
+	c.AddCredential(&Credential{
+		Client:      c.DefaultPrincipal,
+		Server:      configServer(key, principal),
+		TicketFlags: types.NewKrbFlags(),
+		Ticket:      value,
+	})
+}
+
+// Config returns a configuration entry's value (see SetConfig).
+func (c *CCache) Config(key, principal string) ([]byte, bool) {
+	s := configServer(key, principal)
+
+	for _, cred := range c.Credentials {
+		if cred.Server.Realm == s.Realm && cred.Server.PrincipalName.Equal(s.PrincipalName) {
+			return cred.Ticket, true
+		}
+	}
+
+	return nil, false
 }
 
 // GetClientPrincipalName returns a PrincipalName type for the client the credentials cache is for.
@@ -300,87 +662,4 @@ func (h *headerField) valid() bool {
 	}
 
 	return false
-}
-
-func readData(b []byte, p *int, e *binary.ByteOrder) []byte {
-	l := readInt32(b, p, e)
-	return readBytes(b, p, int(l), e)
-}
-
-func readAddress(b []byte, p *int, e *binary.ByteOrder) types.HostAddress {
-	a := types.HostAddress{}
-	a.AddrType = int32(readInt16(b, p, e))
-	a.Address = readData(b, p, e)
-
-	return a
-}
-
-func readAuthDataEntry(b []byte, p *int, e *binary.ByteOrder) types.AuthorizationDataEntry {
-	a := types.AuthorizationDataEntry{}
-	a.ADType = int32(readInt16(b, p, e))
-	a.ADData = readData(b, p, e)
-
-	return a
-}
-
-// Read bytes representing a timestamp.
-func readTimestamp(b []byte, p *int, e *binary.ByteOrder) time.Time {
-	return time.Unix(int64(readInt32(b, p, e)), 0)
-}
-
-// Read bytes representing an eight bit integer.
-func readInt8(b []byte, p *int, e *binary.ByteOrder) (i int8) {
-	buf := bytes.NewBuffer(b[*p : *p+1])
-	binary.Read(buf, *e, &i)
-
-	*p++
-
-	return
-}
-
-// Read bytes representing a sixteen bit integer.
-func readInt16(b []byte, p *int, e *binary.ByteOrder) (i int16) {
-	buf := bytes.NewBuffer(b[*p : *p+2])
-	binary.Read(buf, *e, &i)
-
-	*p += 2
-
-	return
-}
-
-// Read bytes representing a thirty two bit integer.
-func readInt32(b []byte, p *int, e *binary.ByteOrder) (i int32) {
-	buf := bytes.NewBuffer(b[*p : *p+4])
-	binary.Read(buf, *e, &i)
-
-	*p += 4
-
-	return
-}
-
-func readBytes(b []byte, p *int, s int, e *binary.ByteOrder) []byte {
-	buf := bytes.NewBuffer(b[*p : *p+s])
-	r := make([]byte, s)
-	binary.Read(buf, *e, &r)
-
-	*p += s
-
-	return r
-}
-
-// TODO: Investigate why this is used and determine if it's necessary and safe.
-func isNativeEndianLittle() bool {
-	var (
-		x  = 0x012345678
-		p  = unsafe.Pointer(&x)
-		bp = (*[4]byte)(p)
-	)
-
-	var endian bool
-
-	if bp[0]&0xff == 0x78&0xff {
-		endian = true
-	}
-
-	return endian
 }
