@@ -84,6 +84,43 @@ type PAReqEncPARep struct {
 	Chksum     []byte `asn1:"explicit,tag:1"`
 }
 
+// PAC option flags of KERB-PA-PAC-OPTIONS (MS-KILE 2.2.10), as bit numbers.
+const (
+	PACOptionClaims                   = 0
+	PACOptionBranchAware              = 1
+	PACOptionForwardToFullDC          = 2
+	PACOptionResourceBasedConstrained = 3
+)
+
+// PAPACOptions is KERB-PA-PAC-OPTIONS (MS-KILE 2.2.10): which PAC parts
+// the client asks for. Active Directory puts the claims in the PAC only
+// when the client asks for them with it.
+type PAPACOptions struct {
+	Options asn1.BitString `asn1:"explicit,tag:0"`
+}
+
+// NewPAPACOptions returns the PA-PAC-OPTIONS padata for the given option
+// bits (PACOptionClaims, ...).
+func NewPAPACOptions(options ...int) (PAData, error) {
+	o := PAPACOptions{Options: NewKrbFlags()}
+	for _, b := range options {
+		SetFlag(&o.Options, b)
+	}
+
+	v, err := asn1.Marshal(o)
+	if err != nil {
+		return PAData{}, err
+	}
+
+	return PAData{PADataType: patype.PA_PAC_OPTIONS, PADataValue: v}, nil
+}
+
+// Unmarshal bytes into the PAPACOptions.
+func (pa *PAPACOptions) Unmarshal(b []byte) error {
+	_, err := asn1.Unmarshal(b, pa)
+	return err
+}
+
 // Unmarshal bytes into the PAData.
 func (pa *PAData) Unmarshal(b []byte) error {
 	_, err := asn1.Unmarshal(b, pa, asn1.WithUnmarshalAllowTypeGeneralString(true))

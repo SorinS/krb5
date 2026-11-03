@@ -87,7 +87,7 @@ func (cl *Client) ASExchange(realm string, ASReq messages.ASReq, referral int) (
 
 // setPAData adds pre-authentication data to the AS_REQ.
 func setPAData(cl *Client, krberr *messages.KRBError, req *messages.ASReq) error {
-	if !cl.settings.DisablePAFXFAST() {
+	if !cl.settings.DisablePAFXFAST() && !req.PAData.Contains(patype.PA_REQ_ENC_PA_REP) {
 		pa := types.PAData{PADataType: patype.PA_REQ_ENC_PA_REP}
 		req.PAData = append(req.PAData, pa)
 	}
