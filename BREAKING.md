@@ -15,10 +15,15 @@ change will be elaborated on in time):
 
 ## Behaviour changes on the goose-parity branch
 
-Stricter, as MIT is:
+Stricter:
 
 - `Ticket.GetPACType` (and so the service's AP-REQ check) refuses a PAC whose client info does not name the ticket's
-  client and auth time.
+  client and auth time. This is stricter than MIT: MIT's authdata module (`mspac_verify`) leaves a PAC that fails
+  `krb5_pac_verify` unverified and lets the authentication through. go-krb5 already refused a PAC with a bad server
+  signature; the client info check follows that.
+
+Stricter, as MIT is:
+
 - `APReq.Verify` refuses an authenticator whose realm is not the ticket's client realm; `service.VerifyAPREQ`'s
   credentials are the ticket's client, not the authenticator's.
 - A KDC's PBKDF2 iteration count (ETYPE-INFO2) of zero, below the type's default or 2^24 and more is refused.
