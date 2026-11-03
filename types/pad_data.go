@@ -45,7 +45,13 @@ func (pas *PADataSequence) Contains(patype int32) bool {
 
 // GetPAEncTSEncAsnMarshalled returns the bytes of a PAEncTSEnc.
 func GetPAEncTSEncAsnMarshalled() ([]byte, error) {
-	t := time.Now().UTC()
+	return GetPAEncTSEncAsnMarshalledAt(time.Now().UTC())
+}
+
+// GetPAEncTSEncAsnMarshalledAt returns the bytes of a PAEncTSEnc for the
+// time t (the client's time, corrected by its offset from the KDC's).
+func GetPAEncTSEncAsnMarshalledAt(t time.Time) ([]byte, error) {
+	t = t.UTC()
 	p := PAEncTSEnc{
 		PATimestamp: t,
 		PAUSec:      int((t.UnixNano() / int64(time.Microsecond)) - (t.Unix() * 1e6)),

@@ -213,7 +213,7 @@ func (cl *Client) enableAutoSessionRenewal(s *session) {
 	go func(s *session) {
 		for {
 			s.mux.RLock()
-			w := (s.endTime.Sub(time.Now().UTC()) * 5) / 6
+			w := (s.endTime.Sub(cl.Now()) * 5) / 6
 			s.mux.RUnlock()
 
 			if w < 0 {
@@ -270,7 +270,7 @@ func (cl *Client) refreshSession(s *session) (bool, error) {
 	s.mux.RUnlock()
 	cl.Log("refreshing TGT session for %s", realm)
 
-	if time.Now().UTC().Before(renewTill) {
+	if cl.Now().Before(renewTill) {
 		err := cl.renewTGT(s)
 		return true, err
 	}
@@ -287,7 +287,7 @@ func (cl *Client) ensureValidSession(realm string) error {
 		s.mux.RLock()
 
 		d := s.endTime.Sub(s.authTime) / 6
-		if s.endTime.Sub(time.Now().UTC()) > d {
+		if s.endTime.Sub(cl.Now()) > d {
 			s.mux.RUnlock()
 			return nil
 		}

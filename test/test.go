@@ -69,12 +69,13 @@ const (
 	ADPasswordFileEnvVar = "TEST_AD_PASSWORD_FILE"
 )
 
-// ADLive skips the test unless the AD test environment variable is set and
-// TEST_AD_DIR and TEST_AD_PASSWORD_FILE are; it returns the directory and
-// the users' password.
+// ADLive skips the test unless the integration test environment variable
+// is set and TEST_AD_DIR and TEST_AD_PASSWORD_FILE are (TESTAD is for the
+// older tests' AD, TEST.GOKRB5); it returns the directory and the users'
+// password.
 func ADLive(t *testing.T) (string, string) {
 	t.Helper()
-	AD(t)
+	Integration(t)
 
 	dir, pwFile := os.Getenv(ADDirEnvVar), os.Getenv(ADPasswordFileEnvVar)
 	if dir == "" || pwFile == "" {

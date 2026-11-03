@@ -21,7 +21,7 @@ const (
 
 // ChangePasswd changes the password of the client to the value provided.
 func (cl *Client) ChangePasswd(newPasswd string) (bool, error) {
-	ASReq, err := messages.NewASReqForChgPasswd(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName())
+	ASReq, err := messages.NewASReqForChgPasswdAt(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName(), cl.Now())
 	if err != nil {
 		return false, err
 	}

@@ -278,6 +278,14 @@ func (k *ASRep) DecryptEncPart(c *credentials.Credentials) (types.EncryptionKey,
 
 // Verify checks the validity of AS_REP message.
 func (k *ASRep) Verify(cfg *config.Config, creds *credentials.Credentials, asReq ASReq) (bool, error) {
+	return k.VerifyAt(cfg, creds, asReq, time.Now())
+}
+
+// VerifyAt checks the AS_REP against its request, as Verify does, with now
+// the client's time (corrected by its offset from the KDC's). As MIT does,
+// the reply's auth time is checked against it only when kdc_timesync is
+// off: with it on, the client takes the KDC's time from the reply instead.
+func (k *ASRep) VerifyAt(cfg *config.Config, creds *credentials.Credentials, asReq ASReq, now time.Time) (bool, error) {
 	// Ref RFC 4120 Section 3.1.5.
 	if !k.CName.Equal(asReq.ReqBody.CName) {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "CName in response does not match what was requested. Requested: %+v; Reply: %+v", asReq.ReqBody.CName, k.CName)
@@ -310,8 +318,9 @@ func (k *ASRep) Verify(cfg *config.Config, creds *credentials.Credentials, asReq
 		}
 	}
 
-	t := time.Now().UTC()
-	if t.Sub(k.DecryptedEncPart.AuthTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.AuthTime.Sub(t) > cfg.LibDefaults.Clockskew {
+	t := now.UTC()
+	if cfg.LibDefaults.KDCTimeSync != 1 &&
+		(t.Sub(k.DecryptedEncPart.AuthTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.AuthTime.Sub(t) > cfg.LibDefaults.Clockskew) {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "clock skew with KDC too large. Greater than %v seconds", cfg.LibDefaults.Clockskew.Seconds())
 	}
 	// RFC 6806 https://tools.ietf.org/html/rfc6806.html#section-11: a reply
@@ -370,6 +379,12 @@ func (k *TGSRep) DecryptEncPart(key types.EncryptionKey) error {
 
 // Verify checks the validity of the TGS_REP message.
 func (k *TGSRep) Verify(cfg *config.Config, tgsReq TGSReq) (bool, error) {
+	return k.VerifyAt(cfg, tgsReq, time.Now())
+}
+
+// VerifyAt checks the TGS_REP against its request, as Verify does, with now
+// the client's time (corrected by its offset from the KDC's).
+func (k *TGSRep) VerifyAt(cfg *config.Config, tgsReq TGSReq, now time.Time) (bool, error) {
 	if !k.CName.Equal(tgsReq.ReqBody.CName) {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "CName in response does not match what was requested. Requested: %+v; Reply: %+v", tgsReq.ReqBody.CName, k.CName)
 	}
@@ -412,8 +427,8 @@ func (k *TGSRep) Verify(cfg *config.Config, tgsReq TGSReq) (bool, error) {
 		}
 	}
 
-	if time.Since(k.DecryptedEncPart.StartTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.StartTime.Sub(time.Now().UTC()) > cfg.LibDefaults.Clockskew {
-		if time.Since(k.DecryptedEncPart.AuthTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.AuthTime.Sub(time.Now().UTC()) > cfg.LibDefaults.Clockskew {
+	if now.Sub(k.DecryptedEncPart.StartTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.StartTime.Sub(now) > cfg.LibDefaults.Clockskew {
+		if now.Sub(k.DecryptedEncPart.AuthTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.AuthTime.Sub(now) > cfg.LibDefaults.Clockskew {
 			return false, krberror.NewErrorf(krberror.KRBMsgError, "clock skew with KDC too large. Greater than %v seconds.", cfg.LibDefaults.Clockskew.Seconds())
 		}
 	}

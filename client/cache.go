@@ -114,10 +114,10 @@ func (c *Cache) RemoveEntry(spn string) {
 func (cl *Client) GetCachedTicket(spn string) (messages.Ticket, types.EncryptionKey, bool) {
 	if e, ok := cl.cache.getEntry(spn); ok {
 		// If within time window of ticket return it.
-		if time.Now().UTC().After(e.StartTime) && time.Now().UTC().Before(e.EndTime) {
+		if cl.Now().After(e.StartTime) && cl.Now().Before(e.EndTime) {
 			cl.Log("ticket received from cache for %s", spn)
 			return e.Ticket, e.SessionKey, true
-		} else if time.Now().UTC().Before(e.RenewTill) {
+		} else if cl.Now().Before(e.RenewTill) {
 			e, err := cl.renewTicket(e)
 			if err != nil {
 				return e.Ticket, e.SessionKey, false
