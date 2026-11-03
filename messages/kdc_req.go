@@ -207,6 +207,23 @@ func NewTGSReqAt(cname types.PrincipalName, paRealm, kdcRealm string, c *config.
 	return a, err
 }
 
+// NewTGSReqWithOptionsAt is NewTGSReqAt with these KDC options set too
+// (flags.Forwarded, say), before the request is signed.
+func NewTGSReqWithOptionsAt(cname types.PrincipalName, paRealm, kdcRealm string, c *config.Config, tgt Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool, now time.Time, kdcOptions ...int) (TGSReq, error) {
+	a, err := tgsReq(cname, sname, kdcRealm, renewal, c, now)
+	if err != nil {
+		return a, err
+	}
+
+	for _, o := range kdcOptions {
+		types.SetFlag(&a.ReqBody.KDCOptions, o)
+	}
+
+	err = a.setPAData(paRealm, tgt, sessionKey, now)
+
+	return a, err
+}
+
 // NewUser2UserTGSReq returns a TGS-REQ suitable for user-to-user authentication (https://tools.ietf.org/html/rfc4120#section-3.7)
 func NewUser2UserTGSReq(cname types.PrincipalName, kdcRealm string, c *config.Config, clientTGT Ticket, sessionKey types.EncryptionKey, sname types.PrincipalName, renewal bool, verifyingTGT Ticket) (TGSReq, error) {
 	return NewUser2UserTGSReqAt(cname, kdcRealm, c, clientTGT, sessionKey, sname, renewal, verifyingTGT, time.Now())
