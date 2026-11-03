@@ -2,6 +2,7 @@
 package crypto
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -154,6 +155,10 @@ func GetKeyFromPassword(passwd string, cname types.PrincipalName, realm string, 
 		salt = cname.GetSalt(realm)
 	}
 
+	if err := checkS2KParams(et, sk2p); err != nil {
+		return key, et, err
+	}
+
 	k, err := et.StringToKey(passwd, salt, sk2p)
 	if err != nil {
 		return key, et, fmt.Errorf("error deriving key from string: %+v", err)
@@ -209,4 +214,35 @@ func DecryptMessage(ciphertext []byte, key types.EncryptionKey, usage uint32) ([
 	}
 
 	return b, nil
+}
+
+// maxIterationCount is MIT's MAX_ITERATION_COUNT (s2k_pbkdf2.c): more PBKDF2
+// iterations than a KDC may ask for.
+const maxIterationCount = 0x1000000
+
+// checkS2KParams checks the string-to-key parameters a KDC sent (in
+// ETYPE-INFO2, unauthenticated) for an encryption type whose keys come
+// from PBKDF2, as MIT does: an iteration count of zero, fewer than the
+// type's default (4096, or 32768 for RFC 8009's types and Camellia), or
+// 2^24 or more is refused. Fewer would weaken the key against guessing; a
+// forged count of 2^32 - 1 would keep the client busy for hours.
+func checkS2KParams(et etype.EType, s2kparams string) error {
+	def := et.GetDefaultStringToKeyParams()
+	if s2kparams == "" || len(def) != 8 {
+		return nil
+	}
+
+	b, err := hex.DecodeString(s2kparams)
+	if err != nil || len(b) != 4 {
+		return fmt.Errorf("invalid string-to-key parameters %q", s2kparams)
+	}
+
+	d, _ := hex.DecodeString(def)
+	n, min := binary.BigEndian.Uint32(b), binary.BigEndian.Uint32(d)
+
+	if n == 0 || n < min || n >= maxIterationCount {
+		return fmt.Errorf("the KDC's PBKDF2 iteration count %d is outside %d to %d", n, min, maxIterationCount-1)
+	}
+
+	return nil
 }

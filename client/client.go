@@ -68,6 +68,11 @@ func (cl *Client) syncTime(t time.Time, usec int) {
 // NewWithPassword creates a new client from a password credential.
 // Set the realm to empty string to use the default realm from config.
 func NewWithPassword(username, realm, password string, krb5conf *config.Config, settings ...func(*Settings)) *Client {
+	if realm == "" && krb5conf != nil {
+		// The default realm, as the doc of NewWithPassword says (upstream issue 436).
+		realm = krb5conf.LibDefaults.DefaultRealm
+	}
+
 	creds := credentials.New(username, realm)
 
 	return &Client{
@@ -83,6 +88,11 @@ func NewWithPassword(username, realm, password string, krb5conf *config.Config, 
 
 // NewWithKeytab creates a new client from a keytab credential.
 func NewWithKeytab(username, realm string, kt *keytab.Keytab, krb5conf *config.Config, settings ...func(*Settings)) *Client {
+	if realm == "" && krb5conf != nil {
+		// The default realm, as the doc of NewWithPassword says (upstream issue 436).
+		realm = krb5conf.LibDefaults.DefaultRealm
+	}
+
 	creds := credentials.New(username, realm)
 
 	return &Client{

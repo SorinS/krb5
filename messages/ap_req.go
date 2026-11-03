@@ -193,7 +193,9 @@ func (a *APReq) Verify(kt *keytab.Keytab, d time.Duration, cAddr types.HostAddre
 	}
 
 	// Check client's address is listed in the client addresses in the ticket.
-	if len(a.Ticket.DecryptedEncPart.CAddr) > 0 {
+	// An address list of a NetBIOS name alone, as Windows clients ask for,
+	// counts as none: it cannot be checked (MIT's krb5_address_search).
+	if len(a.Ticket.DecryptedEncPart.CAddr) > 0 && !types.HostAddressesNetBIOSOnly(a.Ticket.DecryptedEncPart.CAddr) {
 		// If client addresses are present check if any of them match the source IP that sent the APReq
 		// If there is no match return KRB_AP_ERR_BADADDR error.
 		if !types.HostAddressesContains(a.Ticket.DecryptedEncPart.CAddr, cAddr) {

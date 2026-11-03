@@ -174,6 +174,13 @@ func HostAddressesContains(h []HostAddress, a HostAddress) bool {
 	return false
 }
 
+// HostAddressesNetBIOSOnly reports whether the list is one NetBIOS name
+// and nothing else, which an acceptor treats as no addresses (as MIT's
+// krb5_address_search does).
+func HostAddressesNetBIOSOnly(h []HostAddress) bool {
+	return len(h) == 1 && h[0].AddrType == addrtype.NetBios
+}
+
 // Equal tests if the HostAddress is equal to another HostAddress provided.
 func (h *HostAddress) Equal(a HostAddress) bool {
 	if h.AddrType != a.AddrType {

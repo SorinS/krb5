@@ -27,3 +27,18 @@ func TestGetHostAddress(t *testing.T) {
 		assert.Equal(t, test.hex, hex.EncodeToString(h.Address))
 	}
 }
+
+// A NetBIOS name alone counts as no addresses (upstream PR 492); with
+// another address, or two names, it does not.
+func TestHostAddressesNetBIOSOnly(t *testing.T) {
+	t.Parallel()
+
+	nb := HostAddress{AddrType: addrtype.NetBios, Address: []byte("HOST            ")}
+	ip := HostAddress{AddrType: addrtype.IPv4, Address: []byte{127, 0, 0, 1}}
+
+	assert.True(t, HostAddressesNetBIOSOnly([]HostAddress{nb}))
+	assert.False(t, HostAddressesNetBIOSOnly([]HostAddress{nb, ip}))
+	assert.False(t, HostAddressesNetBIOSOnly([]HostAddress{ip}))
+	assert.False(t, HostAddressesNetBIOSOnly(nil))
+	assert.False(t, HostAddressesNetBIOSOnly([]HostAddress{nb, nb}))
+}
