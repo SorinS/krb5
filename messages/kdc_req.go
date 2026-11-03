@@ -117,11 +117,18 @@ func NewASReq(realm string, c *config.Config, cname, sname types.PrincipalName) 
 	copy(kopts.Bytes, c.LibDefaults.KDCDefaultOptions.Bytes)
 	kopts.BitLength = c.LibDefaults.KDCDefaultOptions.BitLength
 
+	// The claims, which Active Directory sends only when asked (MS-KILE
+	// 3.2.5.8); other KDCs ignore it.
+	pacOptions, err := types.NewPAPACOptions(types.PACOptionClaims)
+	if err != nil {
+		return ASReq{}, err
+	}
+
 	a := ASReq{
 		KDCReqFields{
 			PVNO:    iana.PVNO,
 			MsgType: msgtype.KRB_AS_REQ,
-			PAData:  types.PADataSequence{},
+			PAData:  types.PADataSequence{pacOptions},
 			ReqBody: KDCReqBody{
 				KDCOptions: kopts,
 				Realm:      realm,
@@ -148,7 +155,6 @@ func NewASReq(realm string, c *config.Config, cname, sname types.PrincipalName) 
 	if c.LibDefaults.RenewLifetime != 0 {
 		types.SetFlag(&a.ReqBody.KDCOptions, flags.Renewable)
 		a.ReqBody.RTime = t.Add(c.LibDefaults.RenewLifetime)
-		a.ReqBody.RTime = t.Add(time.Duration(48) * time.Hour)
 	}
 
 	if !c.LibDefaults.NoAddresses {
@@ -289,11 +295,17 @@ func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 		return krberror.Errorf(err, krberror.EncodingError, "error marshaling AP_REQ for pre-authentication data")
 	}
 
+	pacOptions, err := types.NewPAPACOptions(types.PACOptionClaims)
+	if err != nil {
+		return krberror.Errorf(err, krberror.EncodingError, "error marshaling PA-PAC-OPTIONS")
+	}
+
 	k.PAData = types.PADataSequence{
 		types.PAData{
 			PADataType:  patype.PA_TGS_REQ,
 			PADataValue: apb,
 		},
+		pacOptions,
 	}
 
 	return nil

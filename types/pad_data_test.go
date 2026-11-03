@@ -159,3 +159,19 @@ func TestUnmarshalETypeInfo2_only1(t *testing.T) {
 	assert.Equal(t, "Morton's #0", a[0].Salt)
 	assert.Equal(t, []byte("s2k: 0"), a[0].S2KParams)
 }
+
+// KERB-PA-PAC-OPTIONS with the claims bit: SEQUENCE { [0] BIT STRING
+// 32 bits, bit 0 set }.
+func TestNewPAPACOptions(t *testing.T) {
+	t.Parallel()
+
+	pa, err := NewPAPACOptions(PACOptionClaims)
+	require.NoError(t, err)
+	assert.Equal(t, patype.PA_PAC_OPTIONS, pa.PADataType)
+	assert.Equal(t, []byte{0x30, 0x09, 0xa0, 0x07, 0x03, 0x05, 0x00, 0x80, 0x00, 0x00, 0x00}, pa.PADataValue)
+
+	var o PAPACOptions
+	require.NoError(t, o.Unmarshal(pa.PADataValue))
+	assert.True(t, IsFlagSet(&o.Options, PACOptionClaims))
+	assert.False(t, IsFlagSet(&o.Options, PACOptionResourceBasedConstrained))
+}
