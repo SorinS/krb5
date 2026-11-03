@@ -314,10 +314,14 @@ func (k *ASRep) Verify(cfg *config.Config, creds *credentials.Credentials, asReq
 	if t.Sub(k.DecryptedEncPart.AuthTime) > cfg.LibDefaults.Clockskew || k.DecryptedEncPart.AuthTime.Sub(t) > cfg.LibDefaults.Clockskew {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "clock skew with KDC too large. Greater than %v seconds", cfg.LibDefaults.Clockskew.Seconds())
 	}
-	// RFC 6806 https://tools.ietf.org/html/rfc6806.html#section-11
+	// RFC 6806 https://tools.ietf.org/html/rfc6806.html#section-11: a reply
+	// with the enc-pa-rep flag must have the checksum of the request in its
+	// encrypted padata, as MIT checks (krb5int_fast_verify_nego). The KDC
+	// may add PA-FX-FAST there to say it does FAST (RFC 6113 5.4.2); Active
+	// Directory, with armoring support turned on, does not.
 	if asReq.PAData.Contains(patype.PA_REQ_ENC_PA_REP) && types.IsFlagSet(&k.DecryptedEncPart.Flags, flags.EncPARep) {
-		if len(k.DecryptedEncPart.EncPAData) < 2 || !k.DecryptedEncPart.EncPAData.Contains(patype.PA_FX_FAST) {
-			return false, krberror.NewErrorf(krberror.KRBMsgError, "KDC did not respond appropriately to FAST negotiation")
+		if !k.DecryptedEncPart.EncPAData.Contains(patype.PA_REQ_ENC_PA_REP) {
+			return false, krberror.NewErrorf(krberror.KRBMsgError, "KDC set the enc-pa-rep flag without a PA-REQ-ENC-PA-REP")
 		}
 
 		for _, pa := range k.DecryptedEncPart.EncPAData {
