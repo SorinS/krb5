@@ -96,7 +96,25 @@ func (l *Conn) read() (int64, tlv, error) {
 	}
 
 	if l.sasl != nil && l.sasl.Layer() != gsskrb5.LayerNone {
-		for len(l.pending) == 0 {
+		// Wrapped buffers until a whole message is in: RFC 4752 lets a
+		// message span buffers, and a buffer hold several.
+		for {
+			if len(l.pending) > 0 {
+				m, rest, err := readTLV(l.pending)
+				if err == nil {
+					l.pending = rest
+					return parseMessage(m)
+				}
+
+				if !errors.Is(err, errShort) {
+					return 0, tlv{}, err
+				}
+
+				if len(l.pending) > maxMessage {
+					return 0, tlv{}, fmt.Errorf("ldap: a message of more than %d bytes", maxMessage)
+				}
+			}
+
 			var n [4]byte
 			if _, err := io.ReadFull(l.r, n[:]); err != nil {
 				return 0, tlv{}, err
@@ -119,15 +137,6 @@ func (l *Conn) read() (int64, tlv, error) {
 
 			l.pending = append(l.pending, p...)
 		}
-
-		m, rest, err := readTLV(l.pending)
-		if err != nil {
-			return 0, tlv{}, err
-		}
-
-		l.pending = rest
-
-		return parseMessage(m)
 	}
 
 	m, err := readMessage(l.r)

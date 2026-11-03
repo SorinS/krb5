@@ -23,7 +23,12 @@ const (
 	constructed      = 0x20
 )
 
-var errBER = errors.New("ldap: malformed BER")
+var (
+	errBER = errors.New("ldap: malformed BER")
+	// errShort is BER cut short: more may follow (a message split across
+	// SASL buffers).
+	errShort = errors.New("ldap: BER cut short")
+)
 
 // tlv is a BER element: its identifier octet (tags below 31 only, which is
 // all LDAP has) and contents.
@@ -34,8 +39,12 @@ type tlv struct {
 
 // readTLV reads one element from b, returning it and what follows.
 func readTLV(b []byte) (tlv, []byte, error) {
-	if len(b) < 2 || b[0]&0x1f == 0x1f {
+	if len(b) > 0 && b[0]&0x1f == 0x1f {
 		return tlv{}, nil, errBER
+	}
+
+	if len(b) < 2 {
+		return tlv{}, nil, errShort
 	}
 
 	tag, n := b[0], int(b[1])
@@ -43,8 +52,12 @@ func readTLV(b []byte) (tlv, []byte, error) {
 
 	if n&0x80 != 0 {
 		k := n & 0x7f
-		if k == 0 || k > 4 || len(b) < k {
+		if k == 0 || k > 4 {
 			return tlv{}, nil, errBER // indefinite lengths and over 4 GB are not LDAP's
+		}
+
+		if len(b) < k {
+			return tlv{}, nil, errShort
 		}
 
 		n = 0
@@ -55,8 +68,12 @@ func readTLV(b []byte) (tlv, []byte, error) {
 		b = b[k:]
 	}
 
-	if n < 0 || n > len(b) {
+	if n < 0 {
 		return tlv{}, nil, errBER
+	}
+
+	if n > len(b) {
+		return tlv{}, nil, errShort
 	}
 
 	return tlv{tag: tag, body: b[:n]}, b[n:], nil
