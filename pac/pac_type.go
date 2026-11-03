@@ -24,6 +24,8 @@ const (
 	infoTypePACClientClaimsInfo    uint32 = 13
 	infoTypePACDeviceInfo          uint32 = 14
 	infoTypePACDeviceClaimsInfo    uint32 = 15
+	infoTypePACTicketChecksum      uint32 = 16
+	infoTypePACFullChecksum        uint32 = 19
 )
 
 // PACType implements: https://msdn.microsoft.com/en-us/library/cc237950.aspx
@@ -42,7 +44,12 @@ type PACType struct {
 	ClientClaimsInfo   *ClientClaimsInfo
 	DeviceInfo         *DeviceInfo
 	DeviceClaimsInfo   *DeviceClaimsInfo
+	TicketChecksum     *SignatureData // The KDC's signature over the ticket (MS-PAC 2.8.3), in tickets since November 2022.
+	FullChecksum       *SignatureData // The KDC's signature over the whole PAC (MS-PAC 2.8.5), in tickets since November 2022.
 	ZeroSigData        []byte
+
+	// The offsets and sizes of the signature buffers, by type.
+	sigBuffers map[uint32]InfoBuffer
 }
 
 // InfoBuffer implements the PAC Info Buffer: https://msdn.microsoft.com/en-us/library/cc237954.aspx
@@ -88,6 +95,12 @@ func (pac *PACType) Unmarshal(b []byte) (err error) {
 		}
 	}
 
+	for _, b := range buf {
+		if b.Offset > uint64(len(pac.Data)) || uint64(b.CBBufferSize) > uint64(len(pac.Data))-b.Offset {
+			return fmt.Errorf("PAC info buffer of type %d is outside the PAC", b.ULType)
+		}
+	}
+
 	pac.Buffers = buf
 
 	return nil
@@ -130,36 +143,40 @@ func (pac *PACType) ProcessPACInfoBuffers(key types.EncryptionKey, l *log.Logger
 			//	return fmt.Errorf("error processing CredentialsInfo: %w", err)
 			//}
 			// pac.CredentialsInfo = &k.
-		case infoTypePACServerSignatureData:
-			if pac.ServerChecksum != nil {
+		case infoTypePACServerSignatureData, infoTypePACKDCSignatureData, infoTypePACTicketChecksum, infoTypePACFullChecksum:
+			if _, seen := pac.sigBuffers[buf.ULType]; seen {
 				continue
 			}
 
 			var k SignatureData
 
-			zb, err := k.Unmarshal(p)
-			copy(pac.ZeroSigData[int(buf.Offset):int(buf.Offset)+int(buf.CBBufferSize)], zb)
-
-			if err != nil {
-				return fmt.Errorf("error processing ServerChecksum: %w", err)
+			if _, err := k.Unmarshal(p); err != nil {
+				return fmt.Errorf("error processing signature buffer of type %d: %w", buf.ULType, err)
 			}
 
-			pac.ServerChecksum = &k
-		case infoTypePACKDCSignatureData:
-			if pac.KDCChecksum != nil {
-				continue
+			if pac.sigBuffers == nil {
+				pac.sigBuffers = map[uint32]InfoBuffer{}
 			}
 
-			var k SignatureData
+			pac.sigBuffers[buf.ULType] = buf
 
-			zb, err := k.Unmarshal(p)
-			copy(pac.ZeroSigData[int(buf.Offset):int(buf.Offset)+int(buf.CBBufferSize)], zb)
-
-			if err != nil {
-				return fmt.Errorf("error processing KDCChecksum: %w", err)
+			switch buf.ULType {
+			case infoTypePACServerSignatureData:
+				pac.ServerChecksum = &k
+			case infoTypePACKDCSignatureData:
+				pac.KDCChecksum = &k
+			case infoTypePACTicketChecksum:
+				pac.TicketChecksum = &k
+			case infoTypePACFullChecksum:
+				pac.FullChecksum = &k
 			}
 
-			pac.KDCChecksum = &k
+			// The server's signature is over the PAC with the server's and the
+			// KDC's signatures zeroed: all but their types, as MIT and Heimdal
+			// zero them (the RODC identifier too).
+			if buf.ULType == infoTypePACServerSignatureData || buf.ULType == infoTypePACKDCSignatureData {
+				zeroSignature(pac.ZeroSigData, buf)
+			}
 		case infoTypePACClientInfo:
 			if pac.ClientInfo != nil {
 				continue
@@ -257,17 +274,13 @@ func (pac *PACType) ProcessPACInfoBuffers(key types.EncryptionKey, l *log.Logger
 	return nil
 }
 
+// verify checks the server signature, as MIT's krb5_pac_verify does: the
+// PAC must have it and the client info; the logon info (which an MIT KDC's
+// PACs do not carry) and the KDC signature (which only the KDC can check:
+// VerifyKDCSignature) are not needed.
 func (pac *PACType) verify(key types.EncryptionKey) (bool, error) {
-	if pac.KerbValidationInfo == nil {
-		return false, errors.New("PAC Info Buffers does not contain a KerbValidationInfo")
-	}
-
 	if pac.ServerChecksum == nil {
 		return false, errors.New("PAC Info Buffers does not contain a ServerChecksum")
-	}
-
-	if pac.KDCChecksum == nil {
-		return false, errors.New("PAC Info Buffers does not contain a KDCChecksum")
 	}
 
 	if pac.ClientInfo == nil {

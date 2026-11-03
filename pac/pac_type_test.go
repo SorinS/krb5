@@ -38,30 +38,79 @@ func TestPACTypeVerify(t *testing.T) {
 
 	require.NoError(t, pac.ProcessPACInfoBuffers(key, l))
 
+	v, err := pac.verify(key)
+	assert.True(t, v)
+	assert.NoError(t, err)
+
+	// The server signature and the client info are needed; the logon info
+	// (which MIT's PACs lack) and the KDC signature (which only the KDC can
+	// check) are not.
+	badSig := *pac.ServerChecksum
+	badSig.Signature = append([]byte(nil), badSig.Signature...)
+	badSig.Signature[0] ^= 0xFF
+
 	pacInvalidServerSig := pac
-	pacInvalidServerSig.ServerChecksum.Signature[0] ^= 0xFF
-	pacInvalidNilKerbValidationInfo := pac
-	pacInvalidNilKerbValidationInfo.KerbValidationInfo = nil
+	pacInvalidServerSig.ServerChecksum = &badSig
+	pacNilKerbValidationInfo := pac
+	pacNilKerbValidationInfo.KerbValidationInfo = nil
 	pacInvalidNilServerSig := pac
 	pacInvalidNilServerSig.ServerChecksum = nil
-	pacInvalidNilKdcSig := pac
-	pacInvalidNilKdcSig.KDCChecksum = nil
+	pacNilKdcSig := pac
+	pacNilKdcSig.KDCChecksum = nil
 	pacInvalidClientInfo := pac
 	pacInvalidClientInfo.ClientInfo = nil
 
 	var pacs = []struct {
 		pac PACType
+		ok  bool
 	}{
-		{pacInvalidServerSig},
-		{pacInvalidNilKerbValidationInfo},
-		{pacInvalidNilServerSig},
-		{pacInvalidNilKdcSig},
-		{pacInvalidClientInfo},
+		{pacInvalidServerSig, false},
+		{pacNilKerbValidationInfo, true},
+		{pacInvalidNilServerSig, false},
+		{pacNilKdcSig, true},
+		{pacInvalidClientInfo, false},
 	}
 
-	for _, s := range pacs {
+	for i, s := range pacs {
 		v, err := s.pac.verify(key)
-		assert.False(t, v)
-		assert.Error(t, err)
+		assert.Equal(t, s.ok, v, "case %d", i)
+		assert.Equal(t, s.ok, err == nil, "case %d: %v", i, err)
 	}
+}
+
+// Info buffers outside the PAC are refused, not a panic.
+func TestPACType_BufferOutsidePAC(t *testing.T) {
+	t.Parallel()
+
+	b, err := hex.DecodeString(testdata.MarshaledPAC_AD_WIN2K_PAC)
+	require.NoError(t, err)
+
+	var whole PACType
+
+	require.NoError(t, whole.Unmarshal(b))
+
+	end := 0
+	for _, buf := range whole.Buffers {
+		end = max(end, int(buf.Offset)+int(buf.CBBufferSize))
+	}
+
+	for _, cut := range []int{end - 1, len(b) / 2, 100} {
+		var pac PACType
+
+		assert.Error(t, pac.Unmarshal(b[:cut]), "cut at %d", cut)
+	}
+
+	// A buffer of type 6 whose size is too small for a signature.
+	var pac PACType
+
+	require.NoError(t, pac.Unmarshal(b))
+
+	key := types.EncryptionKey{KeyType: 18, KeyValue: make([]byte, 32)}
+	for i := range pac.Buffers {
+		if pac.Buffers[i].ULType == infoTypePACServerSignatureData {
+			pac.Buffers[i].CBBufferSize = 2
+		}
+	}
+
+	assert.Error(t, pac.ProcessPACInfoBuffers(key, log.New(bytes.NewBuffer(nil), "", 0)))
 }

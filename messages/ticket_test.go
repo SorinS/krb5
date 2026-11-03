@@ -137,6 +137,10 @@ func TestAuthorizationData_GetPACType_GOKRB5TestData(t *testing.T) {
 		},
 		DecryptedEncPart: EncTicketPart{
 			AuthorizationData: a,
+			// The PAC's client info: GetPACType checks it against these.
+			CName:    types.PrincipalName{NameType: nametype.KRB_NT_PRINCIPAL, NameString: []string{"testuser1"}},
+			CRealm:   "TEST.GOKRB5",
+			AuthTime: time.Date(2017, 5, 6, 15, 53, 11, 0, time.UTC),
 		},
 	}
 
@@ -165,4 +169,15 @@ func TestAuthorizationData_GetPACType_GOKRB5TestData(t *testing.T) {
 	assert.NotNil(t, pac.UPNDNSInfo)
 	assert.NotNil(t, pac.KDCChecksum)
 	assert.NotNil(t, pac.ServerChecksum)
+
+	// Another client's ticket, or another auth time, is refused.
+	other := tkt
+	other.DecryptedEncPart.CName = types.PrincipalName{NameType: nametype.KRB_NT_PRINCIPAL, NameString: []string{"testuser2"}}
+	_, _, err = other.GetPACType(kt, &sname, l)
+	assert.ErrorContains(t, err, "is not the ticket's client")
+
+	other = tkt
+	other.DecryptedEncPart.AuthTime = tkt.DecryptedEncPart.AuthTime.Add(time.Second)
+	_, _, err = other.GetPACType(kt, &sname, l)
+	assert.ErrorContains(t, err, "is not the ticket's auth time")
 }
