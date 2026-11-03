@@ -430,3 +430,50 @@ func getClient(t *testing.T) *client.Client {
 
 	return cl
 }
+
+// The authenticator's realm must be the ticket's (upstream PR 582), and the
+// credentials are the ticket's client, not the authenticator's.
+func TestVerifyAPREQ_CRealmMismatch(t *testing.T) {
+	t.Parallel()
+
+	cl := getClient(t)
+	sname := types.PrincipalName{
+		NameType:   nametype.KRB_NT_PRINCIPAL,
+		NameString: []string{"HTTP", "host.test.gokrb5"},
+	}
+	b, _ := hex.DecodeString(testdata.HTTP_KEYTAB)
+	kt := keytab.New()
+	require.NoError(t, kt.Unmarshal(b))
+
+	st := time.Now().UTC()
+
+	tkt, sessionKey, err := messages.NewTicket(cl.Credentials.CName(), cl.Credentials.Domain(),
+		sname, "TEST.GOKRB5", types.NewKrbFlags(), kt, 18, 1, st, st,
+		st.Add(time.Duration(24)*time.Hour), st.Add(time.Duration(48)*time.Hour))
+	require.NoError(t, err)
+
+	h, _ := types.GetHostAddress("127.0.0.1:1234")
+
+	a := newTestAuthenticator(t, *cl.Credentials)
+	a.CRealm = "OTHER.GOKRB5"
+
+	APReq, err := messages.NewAPReq(tkt, sessionKey, a)
+	require.NoError(t, err)
+
+	ok, _, err := VerifyAPREQ(&APReq, NewSettings(kt, ClientAddress(h)))
+	require.False(t, ok)
+
+	var kerr messages.KRBError
+	require.ErrorAs(t, err, &kerr)
+	assert.Equal(t, errorcode.KRB_AP_ERR_BADMATCH, kerr.ErrorCode)
+
+	a = newTestAuthenticator(t, *cl.Credentials)
+	APReq, err = messages.NewAPReq(tkt, sessionKey, a)
+	require.NoError(t, err)
+
+	ok, creds, err := VerifyAPREQ(&APReq, NewSettings(kt, ClientAddress(h)))
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, cl.Credentials.Domain(), creds.Domain())
+	assert.Equal(t, cl.Credentials.CName(), creds.CName())
+}

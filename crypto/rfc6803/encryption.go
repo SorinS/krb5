@@ -69,6 +69,10 @@ func DecryptData(key, data []byte, e etype.EType) ([]byte, error) {
 
 // DecryptMessage decrypts the message provided and verifies the integrity.
 func DecryptMessage(key, ciphertext []byte, usage uint32, e etype.EType) ([]byte, error) {
+	if l := e.GetConfounderByteSize() + e.GetHMACBitLength()/8; len(ciphertext) < l {
+		return nil, fmt.Errorf("ciphertext of %d bytes is shorter than its confounder and checksum (%d)", len(ciphertext), l)
+	}
+
 	// Derive the encryption key Ke.
 	ke, err := e.DeriveKey(key, common.GetUsageKe(usage))
 	if err != nil {
@@ -109,6 +113,10 @@ func GetIntegrityHash(pt, key []byte, usage uint32, e etype.EType) ([]byte, erro
 // VerifyIntegrity checks the integrity of the ciphertext message.
 func VerifyIntegrity(key, ct, pt []byte, usage uint32, e etype.EType) bool {
 	hashLen := e.GetHMACBitLength() / 8
+	if len(ct) < hashLen {
+		return false
+	}
+
 	h := make([]byte, hashLen)
 	copy(h, ct[len(ct)-hashLen:])
 

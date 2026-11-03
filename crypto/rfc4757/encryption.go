@@ -67,6 +67,10 @@ func EncryptMessage(key, data []byte, usage uint32, export bool, e etype.EType) 
 // DecryptMessage decrypts the message provided using the methods specific to the etype provided as defined in RFC 4757.
 // The integrity of the message is also verified.
 func DecryptMessage(key, data []byte, usage uint32, export bool, e etype.EType) ([]byte, error) {
+	if l := e.GetConfounderByteSize() + e.GetHMACBitLength()/8; len(data) < l {
+		return nil, fmt.Errorf("ciphertext of %d bytes is shorter than its checksum and confounder (%d)", len(data), l)
+	}
+
 	checksum := data[:e.GetHMACBitLength()/8]
 	ct := data[e.GetHMACBitLength()/8:]
 	_, k2, k3 := deriveKeys(key, checksum, usage, export)
@@ -85,6 +89,11 @@ func DecryptMessage(key, data []byte, usage uint32, export bool, e etype.EType) 
 
 // VerifyIntegrity checks the integrity checksum of the data matches that calculated from the decrypted data.
 func VerifyIntegrity(key, pt, data []byte, e etype.EType) bool {
+	if len(data) < e.GetHMACBitLength()/8 {
+		return false
+	}
+
 	chksum := HMAC(key, pt)
+
 	return hmac.Equal(chksum, data[:e.GetHMACBitLength()/8])
 }

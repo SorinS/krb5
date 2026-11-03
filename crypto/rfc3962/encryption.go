@@ -79,6 +79,10 @@ func DecryptData(key, data []byte, e etype.EType) ([]byte, error) {
 // DecryptMessage decrypts the message provided using the methods specific to the etype provided as defined in RFC 3962.
 // The integrity of the message is also verified.
 func DecryptMessage(key, ciphertext []byte, usage uint32, e etype.EType) ([]byte, error) {
+	if l := e.GetConfounderByteSize() + e.GetHMACBitLength()/8; len(ciphertext) < l {
+		return nil, fmt.Errorf("ciphertext of %d bytes is shorter than its confounder and checksum (%d)", len(ciphertext), l)
+	}
+
 	// Derive the key.
 	k, err := e.DeriveKey(key, common.GetUsageKe(usage))
 	if err != nil {

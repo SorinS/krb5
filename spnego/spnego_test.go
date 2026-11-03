@@ -1,12 +1,16 @@
 package spnego
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"testing"
 
 	"github.com/go-krb5/x/encoding/asn1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-krb5/krb5/gssapi"
+	"github.com/go-krb5/krb5/keytab"
 )
 
 const (
@@ -92,4 +96,24 @@ func TestMarshal_SPNEGO_RespTarg(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, b, mb)
+}
+
+// A NegTokenInit with no mechanism types is refused, not a panic: the
+// 18-byte header "Negotiate YBAGBisGAQUFAqAGMASgAjAA" crashed the handler.
+func TestSPNEGO_AcceptEmptyMechTypes(t *testing.T) {
+	t.Parallel()
+
+	b, err := base64.StdEncoding.DecodeString("YBAGBisGAQUFAqAGMASgAjAA")
+	require.NoError(t, err)
+
+	var st SPNEGOToken
+	require.NoError(t, st.Unmarshal(b))
+
+	s := SPNEGOService(keytab.New())
+
+	assert.NotPanics(t, func() {
+		ok, _, status := s.AcceptSecContext(&st)
+		assert.False(t, ok)
+		assert.Equal(t, gssapi.StatusDefectiveToken, status.Code)
+	})
 }
