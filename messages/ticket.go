@@ -259,12 +259,16 @@ func (t *Ticket) GetPACType(keytab *keytab.Keytab, sname *types.PrincipalName, l
 				continue
 			}
 
-			if ad2[0].ADType == adtype.ADWin2KPAC {
+			for _, inner := range ad2 {
+				if inner.ADType != adtype.ADWin2KPAC {
+					continue
+				}
+
 				isPAC = true
 
 				var p pac.PACType
 
-				err = p.Unmarshal(ad2[0].ADData)
+				err = p.Unmarshal(inner.ADData)
 				if err != nil {
 					return isPAC, p, fmt.Errorf("error unmarshalling PAC: %w", err)
 				}
@@ -279,6 +283,12 @@ func (t *Ticket) GetPACType(keytab *keytab.Keytab, sname *types.PrincipalName, l
 				}
 
 				err = p.ProcessPACInfoBuffers(key, l)
+				if err != nil {
+					return isPAC, p, err
+				}
+
+				// The PAC must be the ticket's client's, as MIT checks (krb5_pac_verify).
+				err = p.ValidateClientInfo(t.DecryptedEncPart.CName, t.DecryptedEncPart.CRealm, t.DecryptedEncPart.AuthTime)
 
 				return isPAC, p, err
 			}

@@ -42,8 +42,8 @@ func VerifyAPREQ(APReq *messages.APReq, s *Settings) (bool, *credentials.Credent
 			return false, creds, err
 		}
 
-		if isPAC {
-			// There is a valid PAC. Adding attributes to creds.
+		if isPAC && pac.KerbValidationInfo != nil {
+			// There is a valid PAC with logon info (an MIT KDC's has none). Adding attributes to creds.
 			creds.SetADCredentials(credentials.ADCredentials{
 				GroupMembershipSIDs: pac.KerbValidationInfo.GetGroupMembershipSIDs(),
 				LogOnTime:           pac.KerbValidationInfo.LogOnTime.Time(),
