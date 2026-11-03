@@ -99,12 +99,13 @@ func dialSendUDP(dialer Dialer, kdcs map[int]string, b []byte) (rb []byte, err e
 		}
 
 		if err = conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			conn.Close()
 			errs = append(errs, fmt.Sprintf("error setting deadline on connection to %s: %v", kdcs[i], err))
 
 			continue
 		}
 
-		if rb, err = sendUDP(conn.(*net.UDPConn), b); err != nil {
+		if rb, err = sendUDP(conn, b); err != nil {
 			errs = append(errs, fmt.Sprintf("error sending to %s: %v", kdcs[i], err))
 
 			continue
@@ -116,8 +117,9 @@ func dialSendUDP(dialer Dialer, kdcs map[int]string, b []byte) (rb []byte, err e
 	return nil, fmt.Errorf("error sending to a KDC: %s", strings.Join(errs, "; "))
 }
 
-// sendUDP sends bytes to connection over UDP.
-func sendUDP(conn *net.UDPConn, b []byte) ([]byte, error) {
+// sendUDP sends bytes to connection over UDP. Any net.Conn a Dialer gives
+// will do.
+func sendUDP(conn net.Conn, b []byte) ([]byte, error) {
 	var r []byte
 
 	defer conn.Close()
@@ -127,8 +129,10 @@ func sendUDP(conn *net.UDPConn, b []byte) ([]byte, error) {
 		return r, fmt.Errorf("error sending to (%s): %w", conn.RemoteAddr().String(), err)
 	}
 
-	udpbuf := make([]byte, 4096)
-	n, _, err := conn.ReadFrom(udpbuf)
+	// A datagram as large as UDP has: a reply larger than the 4096 bytes
+	// read before was cut short and failed to parse.
+	udpbuf := make([]byte, 65535)
+	n, err := conn.Read(udpbuf)
 
 	r = udpbuf[:n]
 	if err != nil {
@@ -171,11 +175,13 @@ func dialSendTCP(dialer Dialer, kdcs map[int]string, b []byte) ([]byte, error) {
 		}
 
 		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			conn.Close()
 			errs = append(errs, fmt.Sprintf("error setting deadline on connection to %s: %v", kdcs[i], err))
+
 			continue
 		}
 
-		rb, err := sendTCP(conn.(*net.TCPConn), b)
+		rb, err := sendTCP(conn, b)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("error sending to %s: %v", kdcs[i], err))
 			continue
@@ -187,8 +193,13 @@ func dialSendTCP(dialer Dialer, kdcs map[int]string, b []byte) ([]byte, error) {
 	return nil, fmt.Errorf("error sending to a KDC: %s", strings.Join(errs, "; "))
 }
 
-// sendTCP sends bytes to connection over TCP.
-func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
+// maxTCPReply bounds a KDC's reply over TCP: its 4-byte length is the
+// peer's to choose, and was allocated whatever it said (up to 4 GB).
+const maxTCPReply = 4 << 20
+
+// sendTCP sends bytes to connection over TCP. Any net.Conn a Dialer gives
+// will do (a proxy's, say: the *net.TCPConn this took made them panic).
+func sendTCP(conn net.Conn, b []byte) ([]byte, error) {
 	defer conn.Close()
 
 	var r []byte
@@ -204,12 +215,17 @@ func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
 
 	sh := make([]byte, 4)
 
-	_, err = conn.Read(sh)
+	_, err = io.ReadFull(conn, sh)
 	if err != nil {
 		return r, fmt.Errorf("error reading response size header: %w", err)
 	}
 
 	s := binary.BigEndian.Uint32(sh)
+
+	// The high bit is reserved (RFC 4120 7.2.2): no KDC sets it.
+	if s&0x80000000 != 0 || s > maxTCPReply {
+		return r, fmt.Errorf("KDC %s announces a reply of %d bytes", conn.RemoteAddr().String(), s)
+	}
 
 	rb := make([]byte, s)
 
