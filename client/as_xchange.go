@@ -3,6 +3,8 @@ package client
 import (
 	"errors"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/go-krb5/krb5/crypto"
 	"github.com/go-krb5/krb5/iana/errorcode"
@@ -11,6 +13,7 @@ import (
 	"github.com/go-krb5/krb5/iana/patype"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
+	"github.com/go-krb5/krb5/spake"
 	"github.com/go-krb5/krb5/types"
 )
 
@@ -79,6 +82,78 @@ type asExchange struct {
 	challenge bool
 
 	cookie []byte // The KDC's PA-FX-COOKIE, sent back.
+
+	// SPAKE: the client's state, what the next request sends (spakeNone,
+	// the support message, or the response to a challenge), the support
+	// message, and the reply key K'[0] once a response is sent.
+	spake        *spake.Client
+	spakeNext    int
+	spakeSupport []byte
+	spakeKey     types.EncryptionKey
+}
+
+const (
+	spakeNone = iota
+	spakeSendSupport
+	spakeSendResponse
+)
+
+// spakeGroups are the SPAKE groups the client takes (MIT's
+// spake_preauth_groups; edwards25519 when not set).
+func (cl *Client) spakeGroups() []int32 {
+	if v, ok := cl.Config.LibDefaults.Values["spake_preauth_groups"]; ok && len(v) > 0 {
+		return spake.GroupsNamed(strings.Join(v, " "))
+	}
+
+	return []int32{spake.Edwards25519}
+}
+
+// spakeOffered acts on the KDC's PA-SPAKE offer in its PREAUTH_REQUIRED
+// (the key known): our support message for an empty offer, or our
+// response to an optimistic challenge in a group we take, or our groups
+// for a challenge in another. False when SPAKE is not offered, or the
+// client takes no group, or the offer cannot be read.
+func (x *asExchange) spakeOffered(hints types.PADataSequence) (bool, error) {
+	groups := x.cl.spakeGroups()
+	if len(groups) == 0 {
+		return false, nil
+	}
+
+	for _, pa := range hints {
+		if pa.PADataType != patype.PA_SPAKE {
+			continue
+		}
+
+		x.spake = spake.NewClient(groups)
+
+		var m spake.Message
+		if len(pa.PADataValue) > 0 {
+			if err := m.Unmarshal(pa.PADataValue); err != nil || m.Choice != spake.ChoiceChallenge {
+				return false, nil
+			}
+
+			if x.spake.Takes(m.Group) {
+				if err := x.spake.Challenge(pa.PADataValue, x.key, nil); err != nil {
+					return false, err
+				}
+
+				x.spakeNext = spakeSendResponse
+
+				return true, nil
+			}
+		}
+
+		b, err := x.spake.Support()
+		if err != nil {
+			return false, err
+		}
+
+		x.spakeSupport, x.spakeNext = b, spakeSendSupport
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // keyFromHints makes the pre-authentication key from the KDC's hints
@@ -163,36 +238,36 @@ func preAuthETypes(hints types.PADataSequence) []int32 {
 // pre-authentication (encrypted challenge inside FAST when the KDC offered
 // it, else the encrypted timestamp), the KDC's cookie, and the ask for the
 // request's checksum in the reply.
-func (x *asExchange) padata(st *messages.FASTState) (types.PADataSequence, error) {
+func (x *asExchange) padata(st *messages.FASTState, bodyDER []byte) (types.PADataSequence, error) {
 	pas := append(types.PADataSequence{}, x.base...)
 	now := x.cl.Now()
 
-	if x.haveKey {
-		if st != nil && x.challenge {
-			v, err := st.EncryptedChallenge(x.key, now)
-			if err != nil {
-				return nil, err
-			}
-
-			pas = append(pas, types.PAData{PADataType: patype.PA_ENCRYPTED_CHALLENGE, PADataValue: v})
-		} else {
-			ts, err := types.GetPAEncTSEncAsnMarshalledAt(now)
-			if err != nil {
-				return nil, err
-			}
-
-			ed, err := crypto.GetEncryptedData(ts, x.key, keyusage.AS_REQ_PA_ENC_TIMESTAMP, x.kvno)
-			if err != nil {
-				return nil, err
-			}
-
-			b, err := ed.Marshal()
-			if err != nil {
-				return nil, err
-			}
-
-			pas = append(pas, types.PAData{PADataType: patype.PA_ENC_TIMESTAMP, PADataValue: b})
+	switch {
+	case x.spakeNext == spakeSendSupport:
+		pas = append(pas, types.PAData{PADataType: patype.PA_SPAKE, PADataValue: x.spakeSupport})
+	case x.spakeNext == spakeSendResponse:
+		// The response's keys are bound to the request's body.
+		v, k0, err := x.spake.Response(bodyDER)
+		if err != nil {
+			return nil, err
 		}
+
+		x.spakeKey = k0
+		pas = append(pas, types.PAData{PADataType: patype.PA_SPAKE, PADataValue: v})
+	case x.haveKey && st != nil && x.challenge:
+		v, err := st.EncryptedChallenge(x.key, now)
+		if err != nil {
+			return nil, err
+		}
+
+		pas = append(pas, types.PAData{PADataType: patype.PA_ENCRYPTED_CHALLENGE, PADataValue: v})
+	case x.haveKey:
+		v, err := encryptedTimestamp(x.key, x.kvno, now)
+		if err != nil {
+			return nil, err
+		}
+
+		pas = append(pas, types.PAData{PADataType: patype.PA_ENC_TIMESTAMP, PADataValue: v})
 	}
 
 	if x.cookie != nil {
@@ -206,6 +281,21 @@ func (x *asExchange) padata(st *messages.FASTState) (types.PADataSequence, error
 	}
 
 	return pas, nil
+}
+
+// encryptedTimestamp is PA-ENC-TIMESTAMP's value: the time now in key.
+func encryptedTimestamp(key types.EncryptionKey, kvno int, now time.Time) ([]byte, error) {
+	ts, err := types.GetPAEncTSEncAsnMarshalledAt(now)
+	if err != nil {
+		return nil, err
+	}
+
+	ed, err := crypto.GetEncryptedData(ts, key, keyusage.AS_REQ_PA_ENC_TIMESTAMP, kvno)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed.Marshal()
 }
 
 func (x *asExchange) run(referral int) (messages.ASRep, error) {
@@ -225,7 +315,12 @@ func (x *asExchange) run(referral int) (messages.ASRep, error) {
 			st = &s
 		}
 
-		pas, err := x.padata(st)
+		bodyDER, err := x.req.ReqBody.Marshal()
+		if err != nil {
+			return messages.ASRep{}, krberror.Errorf(err, krberror.EncodingError, "AS Exchange Error: failed marshaling the AS_REQ body")
+		}
+
+		pas, err := x.padata(st, bodyDER)
 		if err != nil {
 			return messages.ASRep{}, krberror.Errorf(err, krberror.KRBMsgError, "AS Exchange Error: issue with setting PAData on AS_REQ")
 		}
@@ -305,6 +400,13 @@ func (x *asExchange) run(referral int) (messages.ASRep, error) {
 
 			x.challenge = st != nil && hints.Contains(patype.PA_ENCRYPTED_CHALLENGE)
 
+			// SPAKE when the KDC offers it.
+			if ok, err := x.spakeOffered(hints); err != nil {
+				return messages.ASRep{}, krberror.Errorf(err, krberror.EncryptingError, "AS Exchange Error: SPAKE")
+			} else if ok {
+				continue
+			}
+
 			// From now on assume this client will need to do this
 			// pre-auth: its ETYPE-INFO2 (the salt) serves later logins
 			// too.
@@ -318,6 +420,31 @@ func (x *asExchange) run(referral int) (messages.ASRep, error) {
 			// which anyone who sees it can guess the password from.
 			if !x.challenge && cl.disableEncryptedTimestamp(x.realm) {
 				return messages.ASRep{}, krberror.Errorf(e, krberror.KDCError, "AS Exchange Error: the KDC offers no pre-authentication but the encrypted timestamp, which is disabled")
+			}
+		case e.ErrorCode == errorcode.KDC_ERR_MORE_PREAUTH_DATA_REQUIRED && x.spakeNext == spakeSendSupport:
+			// SPAKE's challenge, after our support message: in a group we
+			// offered (no second support message, as MIT).
+			var ch []byte
+
+			for _, pa := range hints {
+				if pa.PADataType == patype.PA_SPAKE {
+					ch = pa.PADataValue
+				}
+			}
+
+			if err := x.spake.Challenge(ch, x.key, nil); err != nil {
+				return messages.ASRep{}, krberror.Errorf(err, krberror.KDCError, "AS Exchange Error: the KDC's SPAKE challenge")
+			}
+
+			x.spakeNext = spakeSendResponse
+		case e.ErrorCode == errorcode.KDC_ERR_PREAUTH_FAILED && x.spakeNext == spakeSendSupport:
+			// Our support message refused (no group in common): the other
+			// pre-authentication the KDC offered. After our response there
+			// is no going back to them (the draft's 10.5).
+			x.spakeNext = spakeNone
+
+			if !x.challenge && cl.disableEncryptedTimestamp(x.realm) {
+				return messages.ASRep{}, krberror.Errorf(e, krberror.KDCError, "AS Exchange Error: no SPAKE group in common, and the encrypted timestamp is disabled")
 			}
 		case e.ErrorCode == errorcode.KDC_ERR_PREAUTH_FAILED && x.storedKey && !retriedStale:
 			// The key of an earlier login's hints, stale: ask again.
@@ -371,10 +498,19 @@ func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FAS
 		rep.CRealm = fr.Finished.CRealm
 	}
 
-	// The reply key: the pre-authentication key if the reply uses its type,
-	// else one by the reply's salt.
+	// The reply key: after SPAKE, K'[0], of the initial key's type; else
+	// the pre-authentication key if the reply uses its type, else one by
+	// the reply's salt.
 	key := x.key
-	if !x.haveKey || key.KeyType != rep.EncPart.EType {
+
+	switch {
+	case x.spakeNext == spakeSendResponse:
+		if rep.EncPart.EType != x.key.KeyType {
+			return rep, krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: the AS_REP after SPAKE is not in the initial key's type")
+		}
+
+		key = x.spakeKey
+	case !x.haveKey || key.KeyType != rep.EncPart.EType:
 		k, _, err := cl.keyFor(rep.EncPart.EType, req.ReqBody.CName, x.realm, rep.PAData)
 		if err != nil {
 			return rep, krberror.Errorf(err, krberror.DecryptingError, "AS Exchange Error: no key for the AS_REP")
@@ -385,7 +521,7 @@ func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FAS
 
 	// The KDC's answer to our encrypted challenge proves it knows our key
 	// (RFC 6113 5.4.6).
-	if st != nil && x.challenge && x.haveKey {
+	if st != nil && x.challenge && x.haveKey && x.spakeNext == spakeNone {
 		if err := st.CheckKDCChallenge(x.key, rep.PAData); err != nil {
 			return rep, krberror.Errorf(err, krberror.KRBMsgError, "AS Exchange Error: the KDC's encrypted challenge")
 		}

@@ -34,6 +34,7 @@ const (
 	KEY_USAGE_ENC_CHALLENGE_CLIENT = 54
 	KEY_USAGE_ENC_CHALLENGE_KDC    = 55
 	KEY_USAGE_AS_REQ               = 56
+	KEY_USAGE_SPAKE                = 65 // draft-ietf-kitten-krb-spake-preauth: the second factor.
 	// 26-511.  Reserved for future use in Kerberos and related protocols.
 	// 512-1023.  Reserved for uses internal to a Kerberos implementation.
 	// 1024.  Encryption for application use in protocols that do not specify key usage values

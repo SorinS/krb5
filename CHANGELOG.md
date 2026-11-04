@@ -27,8 +27,20 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   claims in the PAC). Tested against MIT 1.22 (F.TEST: no encrypted
   timestamp; MIT's kinit with our armor cache and ours with its) and the
   live AD (goosepc$ as the device).
+- **SPAKE pre-authentication** (draft-ietf-kitten-krb-spake-preauth, MIT
+  1.17+): package `spake` (the four groups edwards25519, P-256, P-384,
+  P-521; constant-time point arithmetic from filippo.io/edwards25519 and
+  filippo.io/nistec), used by the AS exchange whenever the KDC offers it:
+  support message, the KDC's challenge (optimistic too), the response with
+  SF-NONE, the reply key K'[0]; inside FAST as well. krb5.conf's
+  `spake_preauth_groups` picks the groups (edwards25519 by default, as MIT).
+  All of the draft's Appendix C vectors pass (but its SHA-1 group -1, which
+  MIT leaves out too); tested against MIT 1.22's S.TEST (every group, every
+  encryption type, no encrypted timestamp) and O.TEST (optimistic
+  challenge, fallback to the timestamp when no group is in common).
 - `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
+- `config.LibDefaults.Values`: the libdefaults relations without a field.
 
 ### Fixed
 
@@ -38,6 +50,10 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
 - A krb5.conf realm with a nested block panicked the parser.
 - A PAC with an empty device claims set was an error, and its logging
   panicked with no logger.
+- The SHA-2 types (aes256-cts-hmac-sha384-192, aes128-cts-hmac-sha256-128)
+  were missing from the default enctype lists, and `default_tkt_enctypes`
+  and `default_tgs_enctypes` did not default to `permitted_enctypes` as in
+  MIT: a user with SHA-2 keys only could not log in by default.
 
 ## Unreleased: branch `goose-parity` (2026-11-03)
 

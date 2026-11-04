@@ -71,7 +71,8 @@ const (
 	PA_PKU2U_NAME     int32 = 148
 	PA_REQ_ENC_PA_REP int32 = 149
 	PA_AS_FRESHNESS   int32 = 150
-	// UNASSIGNED : 151-164.
+	PA_SPAKE          int32 = 151 // draft-ietf-kitten-krb-spake-preauth (MIT 1.17+).
+	// UNASSIGNED : 152-164.
 	PA_SUPPORTED_ETYPES int32 = 165
 	PA_EXTENDED_ERROR   int32 = 166
 	PA_PAC_OPTIONS      int32 = 167 // MS-KILE 2.2.10: KERB-PA-PAC-OPTIONS.
