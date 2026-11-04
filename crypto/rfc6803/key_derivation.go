@@ -138,3 +138,19 @@ func S2KparamsToIterations(s2kparams string) (int64, error) {
 
 	return int64(i), nil
 }
+
+// PRF is the pseudo-random function of RFC 6803 section 6: CMAC under
+// KDF-FEEDBACK-CMAC(key, "prf") of the input.
+func PRF(protocolKey, input []byte, e etype.EType) ([]byte, error) {
+	kp, err := kdfFeedbackCMAC(protocolKey, []byte("prf"), e.GetKeySeedBitLength(), e)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := NewCamelliaCipher(kp)
+	if err != nil {
+		return nil, err
+	}
+
+	return CMAC(block, input), nil
+}
