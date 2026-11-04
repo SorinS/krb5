@@ -20,8 +20,14 @@ import (
 func claimsSet(m *mstypes.ClaimsSetMetadata) (mstypes.ClaimsSet, error) {
 	var c mstypes.ClaimsSet
 
-	if len(m.ClaimsSetBytes) < 1 {
-		return c, errors.New("no bytes available for ClaimsSet")
+	// No claims set (a device without claims, in a compound identity's
+	// PAC): AD sends the metadata with a null claims set.
+	if len(m.ClaimsSetBytes) == 0 {
+		if m.ClaimsSetSize != 0 {
+			return c, errors.New("no bytes available for ClaimsSet")
+		}
+
+		return c, nil
 	}
 
 	b := m.ClaimsSetBytes

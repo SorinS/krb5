@@ -8,6 +8,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,6 +37,9 @@ type Client struct {
 	// The KDC's clock less ours, in nanoseconds, learned from the KDC
 	// (kdc_timesync).
 	timeOffset atomic.Int64
+
+	// The realms whose KDCs said they do FAST: realm -> true.
+	fastRealms sync.Map
 }
 
 // Now returns the client's time: the local clock corrected by the offset

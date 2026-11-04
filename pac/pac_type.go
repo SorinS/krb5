@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/go-krb5/x/rpc/mstypes"
@@ -110,6 +111,10 @@ func (pac *PACType) Unmarshal(b []byte) (err error) {
 //
 // Reference: https://msdn.microsoft.com/en-us/library/cc237954.aspx
 func (pac *PACType) ProcessPACInfoBuffers(key types.EncryptionKey, l *log.Logger) error {
+	if l == nil {
+		l = log.New(io.Discard, "", 0)
+	}
+
 	for _, buf := range pac.Buffers {
 		p := make([]byte, buf.CBBufferSize)
 		copy(p, pac.Data[int(buf.Offset):int(buf.Offset)+int(buf.CBBufferSize)])
