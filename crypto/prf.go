@@ -132,6 +132,28 @@ func CF2(k1 types.EncryptionKey, pepper1 string, k2 types.EncryptionKey, pepper2
 	return types.EncryptionKey{KeyType: k1.KeyType, KeyValue: a}, nil
 }
 
+// RandomToKey is the encryption type's random-to-key of seed (its key
+// seed length): the identity for RC4.
+func RandomToKey(etypeID int32, seed []byte) (types.EncryptionKey, error) {
+	e, err := GetEtype(etypeID)
+	if err != nil {
+		return types.EncryptionKey{}, err
+	}
+
+	if len(seed) != e.GetKeySeedBitLength()/8 {
+		return types.EncryptionKey{}, fmt.Errorf("random-to-key of %d bytes for encryption type %d", len(seed), etypeID)
+	}
+
+	k := append([]byte(nil), seed...)
+	if etypeID != etypeIDRC4 {
+		k = e.RandomToKey(k)
+	}
+
+	return types.EncryptionKey{KeyType: etypeID, KeyValue: k}, nil
+}
+
+const etypeIDRC4 = etypeID.RC4_HMAC
+
 // RandomKey is a new random key of the encryption type: random-to-key of
 // random bytes, so a DES3 key has its parity.
 func RandomKey(etypeID int32) (types.EncryptionKey, error) {

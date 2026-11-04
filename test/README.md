@@ -6,7 +6,7 @@ skipped unless `INTEGRATION=1` and their environment are set:
 
 | Tests | Needs | Environment |
 |---|---|---|
-| `*_MIT` (PAC KDC signatures, clock skew, credential caches read and written by MIT's tools, Camellia, `gsskrb5` against MIT's gss-client and gss-server, SASL, FAST) | MIT KDCs from `test/mitkdc/mitkdc.py` | `TEST_MIT_DIR`, `TEST_MIT_BIN` (both in `$TEST_MIT_DIR/env`) |
+| `*_MIT` (PAC KDC signatures, clock skew, credential caches read and written by MIT's tools, Camellia, `gsskrb5` against MIT's gss-client and gss-server, SASL, FAST, SPAKE) | MIT KDCs from `test/mitkdc/mitkdc.py` | `TEST_MIT_DIR`, `TEST_MIT_BIN` (both in `$TEST_MIT_DIR/env`) |
 | `*_AD` (AD's PACs and compressed claims, clock skew, LDAP with SASL GSSAPI and SID lookups, FAST and compound identity) | an Active Directory DC (`test/windows`) | `TEST_AD_DIR`, `TEST_AD_PASSWORD_FILE`; for LDAP `TEST_AD_LDAP`, `TEST_AD_DC_HOST` |
 | the older integration tests (`TEST.GOKRB5`) | the docker images of https://github.com/go-krb5/krb5-test | `TESTAD`, `TESTPRIVILEGED`, `TEST_KDC_ADDR`, ... |
 

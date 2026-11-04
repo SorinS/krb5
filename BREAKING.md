@@ -49,6 +49,11 @@ Other:
   (a subkey) had the wrong length.
 - RC4: key usage 9 is 9 in the message type (MIT, Heimdal, Windows; RFC 4757's table says 8), usages are 4 bytes little
   endian (they were a varint), and passwords with characters outside the BMP work.
+- The default enctype lists include aes256-cts-hmac-sha384-192 and aes128-cts-hmac-sha256-128 (MIT's defaults), and
+  `default_tkt_enctypes` and `default_tgs_enctypes` are `permitted_enctypes` when not set, as in MIT.
+- The AS exchange uses SPAKE when the KDC offers it (PA-SPAKE), before the encrypted timestamp, as MIT does.
+- New dependencies: filippo.io/edwards25519 and filippo.io/nistec (pure Go; Go's own crypto/internal code, exported),
+  for SPAKE's point arithmetic.
 - `config.Realm` has `DisableEncryptedTimestamp` and `Values` (the realm's other relations); a nested block in a realm
   (`auth_to_local = { ... }`) no longer panics the parser.
 - `pac.PACType.ProcessPACInfoBuffers` takes a nil logger; an empty claims set (a device without claims) is not an

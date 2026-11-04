@@ -158,6 +158,10 @@ type LibDefaults struct {
 
 	// VerifyAPReqNofail has a default value of false.
 	VerifyAPReqNofail bool
+
+	// Values are the other relations as written (spake_preauth_groups,
+	// pkinit_*, ...): key in lower case -> values in order.
+	Values map[string][]string `json:"-"`
 }
 
 // Create a new LibDefaults struct.
@@ -180,14 +184,14 @@ func newLibDefaults() LibDefaults {
 		Clockskew:               time.Duration(300) * time.Second,
 		DefaultClientKeytabName: fmt.Sprintf("/usr/local/var/krb5/user/%s/client.keytab", uid),
 		DefaultKeytabName:       "/etc/krb5.keytab",
-		DefaultTGSEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
-		DefaultTktEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
+		DefaultTGSEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "aes256-cts-hmac-sha384-192", "aes128-cts-hmac-sha256-128", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
+		DefaultTktEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "aes256-cts-hmac-sha384-192", "aes128-cts-hmac-sha256-128", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
 		DNSCanonicalizeHostname: true,
 		K5LoginDirectory:        hdir,
 		KDCDefaultOptions:       opts,
 		KDCTimeSync:             1,
 		NoAddresses:             true,
-		PermittedEnctypes:       []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
+		PermittedEnctypes:       []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "aes256-cts-hmac-sha384-192", "aes128-cts-hmac-sha256-128", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
 		RDNS:                    true,
 		RealmTryDomains:         -1,
 		SafeChecksumType:        8,
@@ -204,6 +208,10 @@ func newLibDefaults() LibDefaults {
 
 // Parse the lines of the libdefaults section of the configuration into the LibDefaults struct.
 func (l *LibDefaults) parseLines(lines []string) error {
+	// MIT: default_tkt_enctypes and default_tgs_enctypes are
+	// permitted_enctypes when not set.
+	var tgsSet, tktSet bool
+
 	for _, line := range lines {
 		if idx := strings.IndexAny(line, "#;"); idx != -1 {
 			line = line[:idx]
@@ -260,8 +268,10 @@ func (l *LibDefaults) parseLines(lines []string) error {
 			l.DefaultRealm = strings.TrimSpace(p[1])
 		case ConfigKeyDefaultTGSENCtypes:
 			l.DefaultTGSEnctypes = strings.Fields(p[1])
+			tgsSet = true
 		case ConfigKeyDefaultTKTENCtypes:
 			l.DefaultTktEnctypes = strings.Fields(p[1])
+			tktSet = true
 		case ConfigKeyDNSCanonicalizeHostname:
 			// MIT's "fallback" (Fedora's and RHEL's default): the name as
 			// it is first, canonicalized only when that fails.
@@ -430,7 +440,29 @@ func (l *LibDefaults) parseLines(lines []string) error {
 			}
 
 			l.VerifyAPReqNofail = v
+		default:
+			if l.Values == nil {
+				l.Values = map[string][]string{}
+			}
+
+			l.Values[key] = append(l.Values[key], strings.TrimSpace(p[1]))
 		}
+	}
+
+	if !tgsSet {
+		l.DefaultTGSEnctypes = append([]string(nil), l.PermittedEnctypes...)
+	}
+
+	if !tktSet {
+		l.DefaultTktEnctypes = append([]string(nil), l.PermittedEnctypes...)
+	}
+
+	if !tgsSet {
+		l.DefaultTGSEnctypes = append([]string(nil), l.PermittedEnctypes...)
+	}
+
+	if !tktSet {
+		l.DefaultTktEnctypes = append([]string(nil), l.PermittedEnctypes...)
 	}
 
 	l.DefaultTGSEnctypeIDs = parseETypes(l.DefaultTGSEnctypes, l.AllowWeakCrypto)
