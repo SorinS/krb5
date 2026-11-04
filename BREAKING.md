@@ -40,6 +40,20 @@ More lenient, as MIT is:
 
 Other:
 
+- A TGS request's authenticator has a subkey (`TGSReq.SubKey`, as MIT and Windows send), so the KDC encrypts the reply
+  in it (usage 9); `TGSReq.SetPAData` keeps the request's other padata. `TGSRep.DecryptEncPartUsage` takes the key and
+  usage.
+- TGS requests are armored with FAST (implicitly, by the TGT) when the realm's KDC said in an AS reply that it does
+  FAST, as MIT does; an unarmored reply is still taken.
+- `crypto.Aes256CtsHmacSha384192.GetKeyByteSize` is 32 (RFC 8009's 256-bit key), not 24: a random key of the type
+  (a subkey) had the wrong length.
+- RC4: key usage 9 is 9 in the message type (MIT, Heimdal, Windows; RFC 4757's table says 8), usages are 4 bytes little
+  endian (they were a varint), and passwords with characters outside the BMP work.
+- `config.Realm` has `DisableEncryptedTimestamp` and `Values` (the realm's other relations); a nested block in a realm
+  (`auth_to_local = { ... }`) no longer panics the parser.
+- `pac.PACType.ProcessPACInfoBuffers` takes a nil logger; an empty claims set (a device without claims) is not an
+  error.
+
 - `client.CacheEntry` has a `Flags` field; `credentials.Principal` is exported (the unexported `principal` is an alias).
 - `config.LibDefaults` has `DNSCanonicalizeHostnameFallback`; enctype names are not case-sensitive, and MIT's family
   names (`aes`, `camellia`, `DEFAULT`, `-name`) are understood; `Load` follows `include` and `includedir`.

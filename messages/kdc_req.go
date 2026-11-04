@@ -50,6 +50,10 @@ type ASReq struct {
 // TGSReq implements RFC 4120 KRB_TGS_REQ: https://tools.ietf.org/html/rfc4120#section-5.4.1.
 type TGSReq struct {
 	KDCReqFields
+	// SubKey is the PA-TGS-REQ authenticator's subkey (made by SetPAData,
+	// as MIT and Windows do): the KDC's reply is encrypted in it (usage 9),
+	// and FAST's implicit armor is made from it.
+	SubKey types.EncryptionKey
 }
 
 type marshalKDCReqBody struct {
@@ -298,12 +302,19 @@ func tgsReq(cname, sname types.PrincipalName, kdcRealm string, renewal bool, c *
 		types.SetFlag(&k.ReqBody.KDCOptions, flags.Renewable)
 	}
 
-	return TGSReq{
-		k,
-	}, nil
+	return TGSReq{KDCReqFields: k}, nil
 }
 
 func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.EncryptionKey, now time.Time) error {
+	return k.SetPAData(paRealm, tgt, sessionKey, now)
+}
+
+// SetPAData signs the request: a PA-TGS-REQ with an AP-REQ for the TGT
+// whose authenticator, at the time now, has a checksum of the body and a
+// new subkey (k.SubKey). The request's other padata (but a PA-TGS-REQ)
+// stay after it; PA-PAC-OPTIONS asking for claims is added if there is
+// none. Call it again after changing the body.
+func (k *TGSReq) SetPAData(paRealm string, tgt Ticket, sessionKey types.EncryptionKey, now time.Time) error {
 	// Marshal the request and calculate checksum.
 	b, err := k.ReqBody.Marshal()
 	if err != nil {
@@ -331,6 +342,13 @@ func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 		CksumType: etype.GetHashID(),
 		Checksum:  cb,
 	}
+
+	k.SubKey, err = crypto.RandomKey(sessionKey.KeyType)
+	if err != nil {
+		return krberror.Errorf(err, krberror.EncryptingError, "error generating the authenticator's subkey")
+	}
+
+	auth.SubKey = k.SubKey
 	// Create AP_REQ.
 	apReq, err := NewAPReq(tgt, sessionKey, auth)
 	if err != nil {
@@ -342,18 +360,29 @@ func (k *TGSReq) setPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 		return krberror.Errorf(err, krberror.EncodingError, "error marshaling AP_REQ for pre-authentication data")
 	}
 
-	pacOptions, err := types.NewPAPACOptions(types.PACOptionClaims)
-	if err != nil {
-		return krberror.Errorf(err, krberror.EncodingError, "error marshaling PA-PAC-OPTIONS")
-	}
-
-	k.PAData = types.PADataSequence{
+	pas := types.PADataSequence{
 		types.PAData{
 			PADataType:  patype.PA_TGS_REQ,
 			PADataValue: apb,
 		},
-		pacOptions,
 	}
+
+	for _, pa := range k.PAData {
+		if pa.PADataType != patype.PA_TGS_REQ {
+			pas = append(pas, pa)
+		}
+	}
+
+	if !pas.Contains(patype.PA_PAC_OPTIONS) {
+		pacOptions, err := types.NewPAPACOptions(types.PACOptionClaims)
+		if err != nil {
+			return krberror.Errorf(err, krberror.EncodingError, "error marshaling PA-PAC-OPTIONS")
+		}
+
+		pas = append(pas, pacOptions)
+	}
+
+	k.PAData = pas
 
 	return nil
 }

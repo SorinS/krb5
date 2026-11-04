@@ -14,10 +14,11 @@ import (
 type Settings struct {
 	disablePAFXFast         bool
 	assumePreAuthentication bool
-	preAuthEType            int32
 	preAuthError            *messages.KRBError // The KDC's PREAUTH_REQUIRED: its ETYPE-INFO2 gives the salt.
 	logger                  *log.Logger
 	dialer                  Dialer
+	armor                   *messages.Armor // FAST armor for AS exchanges.
+	deviceArmor             *messages.Armor // Explicit FAST armor for TGS exchanges.
 }
 
 // A Dialer is a means to establish a connection.

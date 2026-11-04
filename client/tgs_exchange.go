@@ -3,7 +3,10 @@ package client
 import (
 	"github.com/go-krb5/krb5/iana/errorcode"
 	"github.com/go-krb5/krb5/iana/flags"
+	"github.com/go-krb5/krb5/iana/keyusage"
+	"github.com/go-krb5/krb5/iana/msgtype"
 	"github.com/go-krb5/krb5/iana/nametype"
+	"github.com/go-krb5/krb5/iana/patype"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
 	"github.com/go-krb5/krb5/types"
@@ -45,8 +48,15 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		skewFixed bool
 	)
 
+	var st *messages.FASTState
+
 	for {
-		b, err := tgsReq.Marshal()
+		var (
+			b   []byte
+			err error
+		)
+
+		st, b, err = cl.tgsRequest(tgsReq, kdcRealm, sessionKey)
 		if err != nil {
 			return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to marshal TGS_REQ")
 		}
@@ -59,6 +69,15 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		e, ok := err.(messages.KRBError)
 		if !ok {
 			return tgsReq, tgsRep, krberror.Errorf(err, krberror.NetworkingError, "TGS Exchange Error: issue sending TGS_REQ to KDC")
+		}
+
+		// Armored, the KDC's error is inside the armor (when it could
+		// read the armor).
+		if st != nil {
+			if inner, _, ferr := st.Error(e, tgsReq.ReqBody.Nonce); ferr == nil {
+				e = inner
+				err = inner
+			}
 		}
 
 		if e.ErrorCode == errorcode.KRB_AP_ERR_SKEW && !skewFixed && cl.Config.LibDefaults.KDCTimeSync == 1 {
@@ -80,7 +99,30 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to process the TGS_REP")
 	}
 
-	err = tgsRep.DecryptEncPart(sessionKey)
+	// The reply is encrypted in the authenticator's subkey (usage 9), or
+	// in the session key (usage 8) by a request without one; armored, the
+	// key is strengthened. An unarmored reply to an armored request is
+	// taken (as MIT does): the subkey protects it all the same.
+	replyKey, usage := sessionKey, uint32(keyusage.TGS_REP_ENCPART_SESSION_KEY)
+	if len(tgsReq.SubKey.KeyValue) > 0 {
+		replyKey, usage = tgsReq.SubKey, keyusage.TGS_REP_ENCPART_AUTHENTICATOR_SUB_KEY
+	}
+
+	repPAData := types.PADataSequence(tgsRep.PAData)
+	if st != nil && repPAData.Contains(patype.PA_FX_FAST) {
+		fr, err := st.Reply(tgsRep.PAData, tgsRep.Ticket, tgsReq.ReqBody.Nonce)
+		if err != nil {
+			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: the armored TGS_REP")
+		}
+
+		if replyKey, err = fr.ReplyKey(replyKey); err != nil {
+			return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncryptingError, "TGS Exchange Error: the strengthened reply key")
+		}
+
+		tgsRep.PAData = fr.PAData
+	}
+
+	err = tgsRep.DecryptEncPartUsage(replyKey, usage)
 	if err != nil {
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: failed to process the TGS_REP")
 	}
@@ -120,6 +162,55 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 	cl.Log("ticket added to cache for %s (EndTime: %v)", tgsRep.Ticket.SName.PrincipalNameString(), tgsRep.DecryptedEncPart.EndTime)
 
 	return tgsReq, tgsRep, err
+}
+
+// tgsRequest is the TGS_REQ to send: armored (RFC 6113) when the KDC said
+// it does FAST, implicitly by the TGT the request is made with, or with
+// the device armor as well (FASTDeviceArmor); as it is otherwise. The
+// FAST state is nil for an unarmored request.
+func (cl *Client) tgsRequest(tgsReq messages.TGSReq, kdcRealm string, sessionKey types.EncryptionKey) (*messages.FASTState, []byte, error) {
+	device := cl.settings.deviceArmor
+	if device != nil && device.Ticket.Realm != kdcRealm {
+		device = nil
+	}
+
+	if len(tgsReq.SubKey.KeyValue) == 0 || cl.settings.DisablePAFXFAST() || (device == nil && !cl.fastAvailable(kdcRealm)) {
+		b, err := tgsReq.Marshal()
+		return nil, b, err
+	}
+
+	var (
+		inner, outer types.PADataSequence
+		apReq        []byte
+	)
+
+	for _, pa := range tgsReq.PAData {
+		if pa.PADataType == patype.PA_TGS_REQ {
+			outer = append(outer, pa)
+			apReq = pa.PADataValue
+		} else {
+			inner = append(inner, pa)
+		}
+	}
+
+	var (
+		st  messages.FASTState
+		err error
+	)
+
+	if device != nil {
+		st, err = messages.NewFASTArmorTGSExplicit(*device, tgsReq.SubKey, cl.Now())
+	} else {
+		st, err = messages.NewFASTArmorTGS(tgsReq.SubKey, sessionKey)
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	b, err := st.Wrap(msgtype.KRB_TGS_REQ, inner, outer, tgsReq.ReqBody, apReq)
+
+	return &st, b, err
 }
 
 // GetServiceTicket makes a request to get a service ticket for the SPN specified

@@ -32,6 +32,9 @@ this is his org, and we're just the current stewards.
 * Client Side
   * Client that can authenticate to an SPNEGO Kerberos authenticated web service
   * Ability to change client's password
+  * FAST (RFC 6113): AS exchanges armored by a TGT (`FASTArmor`, as MIT's `kinit -T`), encrypted challenge, TGS
+    exchanges armored implicitly, and explicitly by a device's TGT for Active Directory's compound identity
+    (`FASTDeviceArmor`)
 * GSS-API (package `gsskrb5`)
   * The Kerberos V5 mechanism on its own (RFC 4121): initiator and acceptor contexts, mutual authentication, channel
     bindings, credential delegation (a forwarded TGT), MIC and Wrap tokens with sequence checks; tested against MIT's
@@ -143,7 +146,8 @@ The following is working/tested:
 
 * Tested against MIT KDC (1.6.3 is the oldest version tested against; 1.22 on loopback with `test/mitkdc`) and Microsoft
   Active Directory (Windows 2008 R2; Windows Server 2022 live, see `test/README.md`)
-* Tested against a KDC that supports PA-FX-FAST.
+* Tested against a KDC that supports PA-FX-FAST, and with FAST armor against MIT 1.22 (a KDC without encrypted
+  timestamp) and Active Directory (compound identity).
 * Tested against users that have pre-authentication required using PA-ENC-TIMESTAMP.
 * Microsoft PAC Authorization Data is processed and exposed in the HTTP request context. Available if Microsoft Active Directory is used as the KDC.
 

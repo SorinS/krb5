@@ -5,6 +5,40 @@ What this fork (`github.com/go-krb5/krb5`, SorinS/krb5) adds to
 [BREAKING.md](BREAKING.md); how to run the tests is in
 [test/README.md](test/README.md).
 
+## Unreleased: branch `goose-parity`, second round (2026-11-04)
+
+The rest of what the Goose krb5 has (FAST, SPAKE, PKINIT), then S4U, KDC
+proxy and the triage's leftovers. Pure Go; the curve arithmetic SPAKE needs
+comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
+
+### Added
+
+- **PRF, PRF+ and KRB-FX-CF2** for all eight encryption types
+  (`crypto.PRF`, `PRFPlus`, `CF2`, `RandomKey`), checked against MIT
+  libk5crypto's outputs (`crypto/testdata/mit_crypto.txt`, also its
+  string-to-key, checksums and ciphertexts).
+- **FAST** (RFC 6113): `client.FASTArmor` armors AS exchanges with a TGT
+  (`Client.Armor`, `ArmorFromCCache` for MIT's `kinit -T` caches); every
+  request armored, errors read from inside the armor, encrypted challenge
+  when the KDC offers it (with the KDC's challenge checked), the reply key
+  strengthened, the reply's finished part checked. TGS requests are armored
+  implicitly when the KDC does FAST, and explicitly with
+  `client.FASTDeviceArmor` (AD compound identity: the device's info and
+  claims in the PAC). Tested against MIT 1.22 (F.TEST: no encrypted
+  timestamp; MIT's kinit with our armor cache and ours with its) and the
+  live AD (goosepc$ as the device).
+- `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
+  (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
+
+### Fixed
+
+- aes256-cts-hmac-sha384-192 keys are 32 bytes (were 24).
+- RC4: usage 9, usages of 128 and up, passwords outside the BMP (MIT's
+  vectors).
+- A krb5.conf realm with a nested block panicked the parser.
+- A PAC with an empty device claims set was an error, and its logging
+  panicked with no logger.
+
 ## Unreleased: branch `goose-parity` (2026-11-03)
 
 Branched from `camellia128-cts-cmac` (7e3cb81). Pure Go throughout: no cgo,
@@ -87,7 +121,7 @@ MIT's and Windows' tools are used as test oracles only.
 PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 526. The full triage is in `~/Dev/Goose/docs/Go_krb5_upstream_triage.md`.
 
-### Not done yet
+### Not done yet (being done in the second round, above)
 
 - SPNEGO HTTP client: the redirect data race and Host rewrite.
 - SPNEGO with Kerberos not the first mechanism, and mechListMIC.

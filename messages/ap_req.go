@@ -57,6 +57,29 @@ func NewAPReq(tkt Ticket, sessionKey types.EncryptionKey, auth types.Authenticat
 	return a, nil
 }
 
+// NewAPReqUsage is NewAPReq with the authenticator encrypted in the key
+// usage given, whatever the ticket's service: FAST's armor is an AP-REQ for
+// a TGT whose authenticator is in usage 11 (AP-REQ), not 7 (PA-TGS-REQ).
+func NewAPReqUsage(tkt Ticket, sessionKey types.EncryptionKey, auth types.Authenticator, usage uint32) (APReq, error) {
+	m, err := auth.Marshal()
+	if err != nil {
+		return APReq{}, krberror.Errorf(err, krberror.EncodingError, "marshaling error of EncryptedData form of Authenticator")
+	}
+
+	ed, err := crypto.GetEncryptedData(m, sessionKey, usage, tkt.EncPart.KVNO)
+	if err != nil {
+		return APReq{}, krberror.Errorf(err, krberror.EncryptingError, "error encrypting Authenticator")
+	}
+
+	return APReq{
+		PVNO:                   iana.PVNO,
+		MsgType:                msgtype.KRB_AP_REQ,
+		APOptions:              types.NewKrbFlags(),
+		Ticket:                 tkt,
+		EncryptedAuthenticator: ed,
+	}, nil
+}
+
 // Encrypt Authenticator.
 func encryptAuthenticator(a types.Authenticator, sessionKey types.EncryptionKey, tkt Ticket) (types.EncryptedData, error) {
 	var ed types.EncryptedData

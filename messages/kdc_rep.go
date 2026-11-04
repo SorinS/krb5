@@ -300,6 +300,44 @@ func (k *ASRep) VerifyAt(cfg *config.Config, creds *credentials.Credentials, asR
 		return false, krberror.Errorf(err, krberror.DecryptingError, "error decrypting EncPart of AS_REP")
 	}
 
+	sent, err := asReq.Marshal()
+	if err != nil {
+		return false, krberror.Errorf(err, krberror.EncodingError, "error marshaling the AS_REQ")
+	}
+
+	return k.verifyDecrypted(cfg, asReq, sent, key, now)
+}
+
+// VerifyWithKey checks the AS_REP as VerifyAt does, its encrypted part
+// decrypted with the reply key given (a password's or keytab's key,
+// strengthened by FAST; SPAKE's; PKINIT's). sent is the request as it was
+// sent (armored, it is not asReq.Marshal()), whose checksum the KDC's
+// PA-REQ-ENC-PA-REP holds.
+func (k *ASRep) VerifyWithKey(cfg *config.Config, asReq ASReq, sent []byte, key types.EncryptionKey, now time.Time) (bool, error) {
+	if !k.CName.Equal(asReq.ReqBody.CName) {
+		return false, krberror.NewErrorf(krberror.KRBMsgError, "CName in response does not match what was requested. Requested: %+v; Reply: %+v", asReq.ReqBody.CName, k.CName)
+	}
+
+	if k.CRealm != asReq.ReqBody.Realm {
+		return false, krberror.NewErrorf(krberror.KRBMsgError, "CRealm in response does not match what was requested. Requested: %s; Reply: %s", asReq.ReqBody.Realm, k.CRealm)
+	}
+
+	b, err := crypto.DecryptEncPart(k.EncPart, key, keyusage.AS_REP_ENCPART)
+	if err != nil {
+		return false, krberror.Errorf(err, krberror.DecryptingError, "error decrypting AS_REP encrypted part")
+	}
+
+	var denc EncKDCRepPart
+	if err := denc.Unmarshal(b); err != nil {
+		return false, krberror.Errorf(err, krberror.EncodingError, "error unmarshalling decrypted encpart of AS_REP")
+	}
+
+	k.DecryptedEncPart = denc
+
+	return k.verifyDecrypted(cfg, asReq, sent, key, now)
+}
+
+func (k *ASRep) verifyDecrypted(cfg *config.Config, asReq ASReq, sent []byte, key types.EncryptionKey, now time.Time) (bool, error) {
 	if k.DecryptedEncPart.Nonce != asReq.ReqBody.Nonce {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "possible replay attack, nonce in response does not match that in request")
 	}
@@ -347,8 +385,7 @@ func (k *ASRep) VerifyAt(cfg *config.Config, creds *credentials.Credentials, asR
 					return false, krberror.Errorf(err, krberror.ChksumError, "KDC FAST negotiation response error")
 				}
 
-				ab, _ := asReq.Marshal()
-				if !etype.VerifyChecksum(key.KeyValue, ab, pafast.Chksum, keyusage.KEY_USAGE_AS_REQ) {
+				if !etype.VerifyChecksum(key.KeyValue, sent, pafast.Chksum, keyusage.KEY_USAGE_AS_REQ) {
 					return false, krberror.Errorf(err, krberror.ChksumError, "KDC FAST negotiation response checksum invalid")
 				}
 			}
@@ -360,7 +397,14 @@ func (k *ASRep) VerifyAt(cfg *config.Config, creds *credentials.Credentials, asR
 
 // DecryptEncPart decrypts the encrypted part of an TGS_REP.
 func (k *TGSRep) DecryptEncPart(key types.EncryptionKey) error {
-	b, err := crypto.DecryptEncPart(k.EncPart, key, keyusage.TGS_REP_ENCPART_SESSION_KEY)
+	return k.DecryptEncPartUsage(key, keyusage.TGS_REP_ENCPART_SESSION_KEY)
+}
+
+// DecryptEncPartUsage decrypts the encrypted part of a TGS_REP with the key
+// and usage given: the TGT's session key and 8, or the request's
+// authenticator subkey and 9 (TGSReq.SubKey).
+func (k *TGSRep) DecryptEncPartUsage(key types.EncryptionKey, usage uint32) error {
+	b, err := crypto.DecryptEncPart(k.EncPart, key, usage)
 	if err != nil {
 		return krberror.Errorf(err, krberror.DecryptingError, "error decrypting TGS_REP EncPart")
 	}

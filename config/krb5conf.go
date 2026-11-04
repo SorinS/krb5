@@ -455,6 +455,15 @@ type Realm struct {
 	KPasswdServer []string
 
 	MasterKDC []string
+
+	// DisableEncryptedTimestamp is MIT's disable_encrypted_timestamp: the
+	// client never sends the encrypted timestamp (inside FAST it uses
+	// encrypted challenge; SPAKE and PKINIT are not affected).
+	DisableEncryptedTimestamp bool `json:",omitempty"`
+
+	// Values are the realm's other relations as written (pkinit_anchors,
+	// ...): key in lower case -> values in order.
+	Values map[string][]string `json:"-"`
 }
 
 // Parse the lines of a realms entry into the Realm struct.
@@ -523,6 +532,11 @@ func (r *Realm) parseLines(name string, lines []string) (err error) {
 			}
 		}
 
+		// A nested block's closing brace.
+		if !strings.Contains(line, "=") {
+			continue
+		}
+
 		p := strings.SplitN(line, "=", 2)
 		key := strings.TrimSpace(strings.ToLower(p[0]))
 		v := strings.TrimSpace(p[1])
@@ -546,6 +560,18 @@ func (r *Realm) parseLines(name string, lines []string) (err error) {
 			appendUntilFinal(&r.KPasswdServer, v, &kpasswdServerFinal)
 		case ConfigKeyMasterKDC:
 			appendUntilFinal(&r.MasterKDC, v, &masterKDCFinal)
+		case "disable_encrypted_timestamp":
+			if b, err := parseBoolean(v); err == nil {
+				r.DisableEncryptedTimestamp = b
+			}
+		default:
+			if c == 0 && !strings.Contains(v, "{") {
+				if r.Values == nil {
+					r.Values = map[string][]string{}
+				}
+
+				r.Values[key] = append(r.Values[key], v)
+			}
 		}
 	}
 
