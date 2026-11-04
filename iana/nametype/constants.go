@@ -29,4 +29,7 @@ const (
 
 	// Enterprise name; may be mapped to principal name.
 	KRB_NT_ENTERPRISE int32 = 10
+
+	// Well-known names (RFC 6111): WELLKNOWN/ANONYMOUS, ...
+	KRB_NT_WELLKNOWN int32 = 11
 )

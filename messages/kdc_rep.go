@@ -314,12 +314,18 @@ func (k *ASRep) VerifyAt(cfg *config.Config, creds *credentials.Credentials, asR
 // sent (armored, it is not asReq.Marshal()), whose checksum the KDC's
 // PA-REQ-ENC-PA-REP holds.
 func (k *ASRep) VerifyWithKey(cfg *config.Config, asReq ASReq, sent []byte, key types.EncryptionKey, now time.Time) (bool, error) {
+	return k.VerifyWithKeyRealm(cfg, asReq, sent, key, now, asReq.ReqBody.Realm)
+}
+
+// VerifyWithKeyRealm is VerifyWithKey with the client realm the reply must
+// name: an anonymous ticket's is WELLKNOWN:ANONYMOUS (RFC 8062).
+func (k *ASRep) VerifyWithKeyRealm(cfg *config.Config, asReq ASReq, sent []byte, key types.EncryptionKey, now time.Time, crealm string) (bool, error) {
 	if !k.CName.Equal(asReq.ReqBody.CName) {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "CName in response does not match what was requested. Requested: %+v; Reply: %+v", asReq.ReqBody.CName, k.CName)
 	}
 
-	if k.CRealm != asReq.ReqBody.Realm {
-		return false, krberror.NewErrorf(krberror.KRBMsgError, "CRealm in response does not match what was requested. Requested: %s; Reply: %s", asReq.ReqBody.Realm, k.CRealm)
+	if k.CRealm != crealm {
+		return false, krberror.NewErrorf(krberror.KRBMsgError, "CRealm in response does not match what was requested. Requested: %s; Reply: %s", crealm, k.CRealm)
 	}
 
 	b, err := crypto.DecryptEncPart(k.EncPart, key, keyusage.AS_REP_ENCPART)

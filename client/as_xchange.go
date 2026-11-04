@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"errors"
 	"slices"
 	"strings"
@@ -8,11 +9,13 @@ import (
 
 	"github.com/go-krb5/krb5/crypto"
 	"github.com/go-krb5/krb5/iana/errorcode"
+	"github.com/go-krb5/krb5/iana/flags"
 	"github.com/go-krb5/krb5/iana/keyusage"
 	"github.com/go-krb5/krb5/iana/msgtype"
 	"github.com/go-krb5/krb5/iana/patype"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
+	"github.com/go-krb5/krb5/pkinit"
 	"github.com/go-krb5/krb5/spake"
 	"github.com/go-krb5/krb5/types"
 )
@@ -40,6 +43,13 @@ func (cl *Client) ASExchange(realm string, ASReq messages.ASReq, referral int) (
 
 	x := &asExchange{cl: cl, realm: realm, req: ASReq, armor: armor}
 
+	if cl.pkinit != nil || cl.anonymous {
+		x.pk = true
+		x.pkMin = pkinit.GroupFromConfig(cl.Config, realm)
+		x.pkGroup = x.pkMin
+		x.pkKDFs = pkinit.KDFsFromConfig(cl.Config, realm)
+	}
+
 	// The request's own padata (PA-PAC-OPTIONS, ...); pre-authentication
 	// and PA-REQ-ENC-PA-REP are added to each request.
 	for _, pa := range ASReq.PAData {
@@ -53,7 +63,7 @@ func (cl *Client) ASExchange(realm string, ASReq messages.ASReq, referral int) (
 	// A KDC that wanted pre-authentication before: the timestamp in the
 	// first request, by what it said then (unarmored; armored, the KDC's
 	// offer decides between timestamp and challenge).
-	if cl.settings.assumePreAuthentication && armor == nil {
+	if cl.settings.assumePreAuthentication && armor == nil && !x.pk {
 		if err := x.keyFromHints(cl.settings.preAuthHints()); err != nil {
 			return messages.ASRep{}, krberror.Errorf(err, krberror.EncryptingError, "AS Exchange Error: failed to make the pre-authentication key")
 		}
@@ -90,6 +100,22 @@ type asExchange struct {
 	spakeNext    int
 	spakeSupport []byte
 	spakeKey     types.EncryptionKey
+
+	// PKINIT: whether this exchange uses it (an identity, or anonymous);
+	// whether the next request carries PA-PK-AS-REQ (else an empty
+	// PA-AS-FRESHNESS, asking for a token); the group (from
+	// pkinit_dh_min_bits) and the least taken; the KDC's freshness token;
+	// one retry each for another group and a new token; the KDFs offered;
+	// what the reply is checked with.
+	pk           bool
+	pkNext       bool
+	pkGroup      pkinit.Group
+	pkMin        pkinit.Group
+	pkFresh      []byte
+	pkGroupRetry bool
+	pkFreshRetry bool
+	pkKDFs       []pkinit.KDF
+	pkReq        *pkinit.Request
 }
 
 const (
@@ -243,6 +269,28 @@ func (x *asExchange) padata(st *messages.FASTState, bodyDER []byte) (types.PADat
 	now := x.cl.Now()
 
 	switch {
+	case x.pk && x.pkNext:
+		// A new key pair each time, the AuthPack bound to the body.
+		dh, err := pkinit.NewDHKey(x.pkGroup)
+		if err != nil {
+			return nil, err
+		}
+
+		ap, err := pkinit.AuthPack(now, x.req.ReqBody.Nonce, bodyDER, x.pkFresh, dh, x.pkKDFs)
+		if err != nil {
+			return nil, err
+		}
+
+		v, err := pkinit.PAPKASReq(ap, x.cl.pkinit)
+		if err != nil {
+			return nil, err
+		}
+
+		x.pkReq = &pkinit.Request{DH: dh, Nonce: x.req.ReqBody.Nonce, KDFs: x.pkKDFs}
+		pas = append(pas, types.PAData{PADataType: patype.PA_PK_AS_REQ, PADataValue: v})
+	case x.pk:
+		// An empty PA-AS-FRESHNESS asks for a freshness token (RFC 8070).
+		pas = append(pas, types.PAData{PADataType: patype.PA_AS_FRESHNESS, PADataValue: []byte{}})
 	case x.spakeNext == spakeSendSupport:
 		pas = append(pas, types.PAData{PADataType: patype.PA_SPAKE, PADataValue: x.spakeSupport})
 	case x.spakeNext == spakeSendResponse:
@@ -386,8 +434,16 @@ func (x *asExchange) run(referral int) (messages.ASRep, error) {
 			}
 		}
 
+		if x.pk {
+			if done, err := x.pkError(e, hints); err != nil {
+				return messages.ASRep{}, err
+			} else if done {
+				continue
+			}
+		}
+
 		switch {
-		case e.ErrorCode == errorcode.KDC_ERR_PREAUTH_REQUIRED && (!x.haveKey || x.storedKey && !retriedStale):
+		case e.ErrorCode == errorcode.KDC_ERR_PREAUTH_REQUIRED && !x.pk && (!x.haveKey || x.storedKey && !retriedStale):
 			if x.storedKey {
 				retriedStale = true
 			}
@@ -468,6 +524,56 @@ func (x *asExchange) run(referral int) (messages.ASRep, error) {
 	return messages.ASRep{}, krberror.New(krberror.KDCError, "AS Exchange Error: too many rounds with the KDC")
 }
 
+// pkError acts on a KDC error to a PKINIT exchange: the KDC's offer (and
+// its freshness token) to our first request; a group refused, for the
+// first of those the KDC lists that is no weaker; a stale or missing
+// token, for a new one. True when the next request is to be made.
+func (x *asExchange) pkError(e messages.KRBError, hints types.PADataSequence) (bool, error) {
+	token := func() ([]byte, bool) {
+		for _, pa := range hints {
+			if pa.PADataType == patype.PA_AS_FRESHNESS && len(pa.PADataValue) > 0 {
+				return pa.PADataValue, true
+			}
+		}
+
+		return nil, false
+	}
+
+	switch {
+	case e.ErrorCode == errorcode.KDC_ERR_PREAUTH_REQUIRED && !x.pkNext:
+		if !hints.Contains(patype.PA_PK_AS_REQ) {
+			return false, krberror.Errorf(e, krberror.KDCError, "AS Exchange Error: the KDC does not offer PKINIT")
+		}
+
+		x.pkFresh, _ = token()
+		x.pkNext = true
+
+		return true, nil
+	case e.ErrorCode == errorcode.KDC_ERR_DH_KEY_PARAMETERS_NOT_ACCEPTED && x.pkNext && !x.pkGroupRetry:
+		td, ok := pkinit.TDDHParameters(e.EData)
+		if !ok {
+			return false, krberror.Errorf(e, krberror.KDCError, "AS Exchange Error: the KDC refuses our DH group and lists none")
+		}
+
+		g := pkinit.PickGroup(td, x.pkMin)
+		if g == 0 {
+			return false, krberror.Errorf(e, krberror.KDCError, "AS Exchange Error: the KDC takes no DH group we take")
+		}
+
+		x.pkGroup, x.pkGroupRetry = g, true
+
+		return true, nil
+	case (e.ErrorCode == errorcode.KDC_ERR_PREAUTH_EXPIRED || e.ErrorCode == errorcode.KDC_ERR_PREAUTH_FAILED) && x.pkNext && !x.pkFreshRetry:
+		if t, ok := token(); ok && !bytes.Equal(t, x.pkFresh) {
+			x.pkFresh, x.pkFreshRetry = t, true
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // reply checks the KDC's AS_REP to the request sent.
 func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FASTState) (messages.ASRep, error) {
 	cl := x.cl
@@ -502,8 +608,20 @@ func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FAS
 	// the pre-authentication key if the reply uses its type, else one by
 	// the reply's salt.
 	key := x.key
+	crealm := x.realm
+
+	if x.cl.anonymous {
+		crealm = AnonymousRealm
+	}
 
 	switch {
+	case x.pk:
+		k, err := x.pkReplyKey(req, sent, rep)
+		if err != nil {
+			return rep, err
+		}
+
+		key = k
 	case x.spakeNext == spakeSendResponse:
 		if rep.EncPart.EType != x.key.KeyType {
 			return rep, krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: the AS_REP after SPAKE is not in the initial key's type")
@@ -532,8 +650,14 @@ func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FAS
 		return rep, krberror.Errorf(err, krberror.EncryptingError, "AS Exchange Error: the strengthened reply key")
 	}
 
-	if ok, err := rep.VerifyWithKey(cl.Config, req, sent, replyKey, cl.Now()); !ok {
+	if ok, err := rep.VerifyWithKeyRealm(cl.Config, req, sent, replyKey, cl.Now(), crealm); !ok {
 		return rep, krberror.Errorf(err, krberror.KRBMsgError, "AS Exchange Error: AS_REP is not valid or client password/keytab incorrect")
+	}
+
+	if x.pk {
+		if err := x.pkCheckReply(rep, key); err != nil {
+			return rep, err
+		}
 	}
 
 	if !slices.Contains(req.ReqBody.EType, rep.DecryptedEncPart.Key.KeyType) {
@@ -549,6 +673,74 @@ func (x *asExchange) reply(req messages.ASReq, sent, rb []byte, st *messages.FAS
 	}
 
 	return rep, nil
+}
+
+// pkReplyKey is PKINIT's reply key, from the reply's PA-PK-AS-REP.
+func (x *asExchange) pkReplyKey(req messages.ASReq, sent []byte, rep messages.ASRep) (types.EncryptionKey, error) {
+	if !x.pkNext || x.pkReq == nil {
+		return types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: a reply to a request without PKINIT")
+	}
+
+	var v []byte
+
+	for _, pa := range rep.PAData {
+		if pa.PADataType == patype.PA_PK_AS_REP {
+			v = pa.PADataValue
+		}
+	}
+
+	if v == nil {
+		return types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: no PA-PK-AS-REP in the reply")
+	}
+
+	trust, err := pkinit.TrustFromConfig(x.cl.Config, x.realm)
+	if err != nil {
+		return types.EncryptionKey{}, krberror.Errorf(err, krberror.ConfigError, "AS Exchange Error: PKINIT trust")
+	}
+
+	// Anonymous, the client's realm in the KDF is the anonymous one (MIT's
+	// KDC renames the request's client so).
+	crealm := x.realm
+	if x.cl.anonymous {
+		crealm = AnonymousRealm
+	}
+
+	k, err := x.pkReq.ReplyKey(v, trust, rep.EncPart.EType, req.ReqBody.CName, crealm, req.ReqBody.SName, x.realm, sent, x.cl.Now())
+	if err != nil {
+		return k, krberror.Errorf(err, krberror.KRBMsgError, "AS Exchange Error: PKINIT reply")
+	}
+
+	return k, nil
+}
+
+// pkCheckReply checks what PKINIT asks of a decrypted reply: the KDC's
+// contribution to the session key (PA-PKINIT-KX, RFC 8062 7), required
+// when anonymous and checked whenever sent; anonymous, the ticket flagged
+// so.
+func (x *asExchange) pkCheckReply(rep messages.ASRep, replyKey types.EncryptionKey) error {
+	var kx []byte
+
+	for _, pa := range rep.PAData {
+		if pa.PADataType == patype.PA_PKINIT_KX {
+			kx = pa.PADataValue
+		}
+	}
+
+	if kx == nil && x.cl.anonymous {
+		return krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: an anonymous reply without PA-PKINIT-KX")
+	}
+
+	if kx != nil {
+		if err := pkinit.CheckKX(kx, replyKey, rep.DecryptedEncPart.Key); err != nil {
+			return krberror.Errorf(err, krberror.KRBMsgError, "AS Exchange Error: PA-PKINIT-KX")
+		}
+	}
+
+	if x.cl.anonymous && !types.IsFlagSet(&rep.DecryptedEncPart.Flags, flags.Anonymous) {
+		return krberror.NewErrorf(krberror.KRBMsgError, "AS Exchange Error: an anonymous ticket not flagged anonymous")
+	}
+
+	return nil
 }
 
 // disableEncryptedTimestamp is MIT's disable_encrypted_timestamp for the

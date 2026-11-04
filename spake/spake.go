@@ -393,7 +393,6 @@ func (o nistOps[P]) mulAdd(a, b, p []byte) ([]byte, error) {
 		return nil, ErrPeerKey
 	}
 
-
 	pp, err := o.newPoint().SetBytes(p)
 	if err != nil {
 		return nil, ErrPeerKey
@@ -426,7 +425,6 @@ func (o nistOps[P]) shared(a, b, p, peer []byte) ([]byte, error) {
 	if len(a) != o.scalarLen() || len(b) != o.scalarLen() || (peer[0] != 2 && peer[0] != 3) {
 		return nil, ErrPeerKey
 	}
-
 
 	pp, err := o.newPoint().SetBytes(p)
 	if err != nil {

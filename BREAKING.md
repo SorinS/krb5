@@ -52,6 +52,8 @@ Other:
 - The default enctype lists include aes256-cts-hmac-sha384-192 and aes128-cts-hmac-sha256-128 (MIT's defaults), and
   `default_tkt_enctypes` and `default_tgs_enctypes` are `permitted_enctypes` when not set, as in MIT.
 - The AS exchange uses SPAKE when the KDC offers it (PA-SPAKE), before the encrypted timestamp, as MIT does.
+- `ASRep.VerifyWithKey` and `VerifyWithKeyRealm` check a reply with the reply key given (FAST, SPAKE, PKINIT);
+  `ASRep.VerifyAt` is unchanged.
 - New dependencies: filippo.io/edwards25519 and filippo.io/nistec (pure Go; Go's own crypto/internal code, exported),
   for SPAKE's point arithmetic.
 - `config.Realm` has `DisableEncryptedTimestamp` and `Values` (the realm's other relations); a nested block in a realm
