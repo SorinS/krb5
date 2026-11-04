@@ -36,6 +36,8 @@ this is his org, and we're just the current stewards.
     exchanges armored implicitly, and explicitly by a device's TGT for Active Directory's compound identity
     (`FASTDeviceArmor`)
   * SPAKE pre-authentication (MIT 1.17+; package `spake`): no offline password guessing from a captured exchange
+  * PKINIT (package `pkinit`): a TGT from an X.509 certificate (`NewWithPKINIT`), or anonymously (`NewAnonymous`, whose
+    TGT can armor FAST)
 * GSS-API (package `gsskrb5`)
   * The Kerberos V5 mechanism on its own (RFC 4121): initiator and acceptor contexts, mutual authentication, channel
     bindings, credential delegation (a forwarded TGT), MIC and Wrap tokens with sequence checks; tested against MIT's

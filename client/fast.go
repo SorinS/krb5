@@ -50,7 +50,12 @@ func (cl *Client) Armor() (messages.Armor, error) {
 		return messages.Armor{}, err
 	}
 
-	return messages.Armor{Ticket: tgt, SessionKey: key, CName: cl.Credentials.CName(), CRealm: cl.Credentials.Domain()}, nil
+	crealm := cl.Credentials.Domain()
+	if cl.anonymous {
+		crealm = AnonymousRealm
+	}
+
+	return messages.Armor{Ticket: tgt, SessionKey: key, CName: cl.clientName(), CRealm: crealm}, nil
 }
 
 // ArmorFromCCache is the cache's TGT for the realm as an armor (MIT's

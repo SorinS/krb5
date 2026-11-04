@@ -19,10 +19,12 @@ import (
 	"github.com/go-krb5/krb5/crypto"
 	"github.com/go-krb5/krb5/crypto/etype"
 	"github.com/go-krb5/krb5/iana/errorcode"
+	"github.com/go-krb5/krb5/iana/flags"
 	"github.com/go-krb5/krb5/iana/nametype"
 	"github.com/go-krb5/krb5/keytab"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
+	"github.com/go-krb5/krb5/pkinit"
 	"github.com/go-krb5/krb5/types"
 )
 
@@ -40,6 +42,10 @@ type Client struct {
 
 	// The realms whose KDCs said they do FAST: realm -> true.
 	fastRealms sync.Map
+
+	// PKINIT: the identity, or anonymous.
+	pkinit    *pkinit.Identity
+	anonymous bool
 }
 
 // Now returns the client's time: the local clock corrected by the offset
@@ -313,7 +319,7 @@ func (cl *Client) IsConfigured() (bool, error) {
 		return false, errors.New("client does not have a define realm")
 	}
 	// Client needs to have either a password, keytab or a session already (later when loading from CCache).
-	if !cl.Credentials.HasPassword() && !cl.Credentials.HasKeytab() {
+	if !cl.hasSecret() {
 		authTime, _, _, _, err := cl.sessionTimes(cl.Credentials.Domain())
 		if err != nil || authTime.IsZero() {
 			return false, errors.New("client has neither a keytab nor a password set and no session")
@@ -341,7 +347,7 @@ func (cl *Client) Login() error {
 		return err
 	}
 
-	if !cl.Credentials.HasPassword() && !cl.Credentials.HasKeytab() {
+	if !cl.hasSecret() {
 		_, endTime, _, _, err := cl.sessionTimes(cl.Credentials.Domain())
 		if err != nil {
 			return krberror.Errorf(err, krberror.KRBMsgError, "no user credentials available and error getting any existing session")
@@ -354,9 +360,13 @@ func (cl *Client) Login() error {
 		return nil
 	}
 
-	ASReq, err := messages.NewASReqForTGTAt(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName(), cl.Now())
+	ASReq, err := messages.NewASReqForTGTAt(cl.Credentials.Domain(), cl.Config, cl.clientName(), cl.Now())
 	if err != nil {
 		return krberror.Errorf(err, krberror.KRBMsgError, "error generating new AS_REQ")
+	}
+
+	if cl.anonymous {
+		types.SetFlag(&ASReq.ReqBody.KDCOptions, flags.KDCOptionRequestAnonymous)
 	}
 
 	ASRep, err := cl.ASExchange(cl.Credentials.Domain(), ASReq, 0)

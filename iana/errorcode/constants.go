@@ -232,6 +232,14 @@ const (
 
 	// The KDC cannot accommodate the requested option (RFC 6113).
 	KDC_ERR_UNKNOWN_CRITICAL_FAST_OPTIONS int32 = 93
+
+	// None of the client's KDFs is acceptable (RFC 8636).
+	KDC_ERR_NO_ACCEPTABLE_KDF int32 = 100
+
+	// The client's Diffie-Hellman group is not accepted (RFC 4556): RFC
+	// 4120's KDC_ERR_KEY_TOO_WEAK, renamed; the KDC lists the groups it
+	// takes in TD-DH-PARAMETERS.
+	KDC_ERR_DH_KEY_PARAMETERS_NOT_ACCEPTED = KDC_ERR_KEY_TOO_WEAK
 )
 
 // Lookup an error code description.

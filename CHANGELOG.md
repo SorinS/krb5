@@ -38,6 +38,21 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   MIT leaves out too); tested against MIT 1.22's S.TEST (every group, every
   encryption type, no encrypted timestamp) and O.TEST (optimistic
   challenge, fallback to the timestamp when no group is in common).
+- **PKINIT** (RFC 4556): package `pkinit` and `client.NewWithPKINIT`: a TGT
+  from a certificate and its key (RSA, ECDSA, Ed25519; `LoadIdentity` reads
+  MIT's `FILE:cert[,key]`), the reply key by Diffie-Hellman in MODP 2048 or
+  4096 or P-256/384/521 (`pkinit_dh_min_bits`; the KDC's TD-DH-PARAMETERS
+  followed when it refuses ours), RFC 8636's KDFs (and RFC 4556's
+  octetstring2key), freshness tokens (RFC 8070). The KDC's certificate is
+  checked as MIT does: `pkinit_anchors`, `pkinit_pool`, its id-pkinit-san,
+  or `pkinit_kdc_hostname` with `pkinit_eku_checking`. A small CMS
+  SignedData (sign, verify) of its own, checked against OpenSSL both ways.
+  RFC 4556's and RFC 8636's vectors pass; tested against MIT 1.22's P.TEST,
+  Q.TEST (4096-bit groups, freshness required), R.TEST (KDC named by host),
+  N.TEST.
+- **Anonymous PKINIT** (RFC 8062): `client.NewAnonymous` (MIT's `kinit -n`),
+  the KDC's PA-PKINIT-KX checked; its TGT armors FAST (a password login
+  armored by an anonymous TGT, tested against MIT).
 - `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
 - `config.LibDefaults.Values`: the libdefaults relations without a field.
@@ -50,6 +65,9 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
 - A krb5.conf realm with a nested block panicked the parser.
 - A PAC with an empty device claims set was an error, and its logging
   panicked with no logger.
+- `flags.RequestAnonymous` (12) is not the request-anonymous KDC option:
+  `flags.KDCOptionRequestAnonymous` (16) and the ticket flag
+  `flags.Anonymous` (16, as MIT sets it) are added; `nametype.KRB_NT_WELLKNOWN`.
 - The SHA-2 types (aes256-cts-hmac-sha384-192, aes128-cts-hmac-sha256-128)
   were missing from the default enctype lists, and `default_tkt_enctypes`
   and `default_tgs_enctypes` did not default to `permitted_enctypes` as in

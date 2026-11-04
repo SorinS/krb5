@@ -28,6 +28,18 @@ const (
 	Renew                  = 30
 	Validate               = 31
 
+	// CNameInAdditionalTicket is the KDC option of S4U2Proxy (MS-SFU
+	// 2.2.3): the ticket's client is the additional ticket's.
+	CNameInAdditionalTicket = 14
+
+	// KDCOptionRequestAnonymous is RFC 6112's (RFC 8062's) request-anonymous
+	// KDC option; RequestAnonymous above is not its number.
+	KDCOptionRequestAnonymous = 16
+
+	// Anonymous is the ticket flag of an anonymous ticket (RFC 6112, as MIT
+	// sets it: TKT_FLG_ANONYMOUS, 0x00008000).
+	Anonymous = 16
+
 	// AP Option Flags
 	// 0 Reserved for future use.
 	APOptionUseSessionKey  = 1
