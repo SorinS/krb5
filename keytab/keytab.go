@@ -25,19 +25,24 @@ const (
 // Keytab struct.
 type Keytab struct {
 	version uint8
-	Entries []entry
+	Entries []Entry
 }
 
-// Keytab entry struct.
-type entry struct {
-	Principal principal
+// Entry is one key in a keytab. Its fields may be read and set directly to
+// manipulate a keytab (its timestamp, for example); use SetKVNO to change the
+// key version, so the 8-bit and 32-bit forms stay consistent.
+type Entry struct {
+	Principal Principal
 	Timestamp time.Time
-	KVNO8     uint8
-	Key       types.EncryptionKey
-	KVNO      uint32
+	// KVNO8 is the key version in the format's original 8-bit field; KVNO is
+	// the full version from the 32-bit extension (they differ only for a
+	// version above 255). SetKVNO sets both; prefer it over setting either.
+	KVNO8 uint8
+	Key   types.EncryptionKey
+	KVNO  uint32
 }
 
-func (e entry) String() string {
+func (e Entry) String() string {
 	return fmt.Sprintf("% 4d %s %-56s %2d %-64x",
 		e.KVNO8,
 		e.Timestamp.Format("02/01/06 15:04:05"),
@@ -47,21 +52,35 @@ func (e entry) String() string {
 	)
 }
 
-// Keytab entry principal struct.
-type principal struct {
+// SetKVNO sets the entry's key version, in both the 8-bit field (low byte) and
+// the 32-bit extension, so a version above 255 (Active Directory's can be) is
+// written and read back whole.
+func (e *Entry) SetKVNO(kvno uint32) {
+	e.KVNO = kvno
+	e.KVNO8 = uint8(kvno)
+}
+
+// SetTimestamp sets the entry's timestamp (when the key was made).
+func (e *Entry) SetTimestamp(t time.Time) {
+	e.Timestamp = t
+}
+
+// Principal is a keytab entry's principal. Its fields may be read and set
+// directly.
+type Principal struct {
 	NumComponents int16 `json:"-"`
 	Realm         string
 	Components    []string
 	NameType      int32
 }
 
-func (p principal) String() string {
+func (p Principal) String() string {
 	return fmt.Sprintf("%s@%s", strings.Join(p.Components, "/"), p.Realm)
 }
 
 // New creates new, empty Keytab type.
 func New() *Keytab {
-	var e []entry
+	var e []Entry
 
 	return &Keytab{
 		version: 2,
@@ -108,10 +127,10 @@ func (kt *Keytab) GetEncryptionKey(princName types.PrincipalName, realm string, 
 }
 
 // Create a new Keytab entry.
-func newEntry() entry {
+func newEntry() Entry {
 	var b []byte
 
-	return entry{
+	return Entry{
 		Principal: newPrincipal(),
 		Timestamp: time.Time{},
 		KVNO8:     0,
@@ -129,8 +148,8 @@ func (kt Keytab) String() string {
 	s = `KVNO Timestamp         Principal                                                ET Key
 ---- ----------------- -------------------------------------------------------- -- ----------------------------------------------------------------
 `
-	for _, entry := range kt.Entries {
-		s += entry.String() + "\n"
+	for _, e := range kt.Entries {
+		s += e.String() + "\n"
 	}
 
 	return s
@@ -193,10 +212,10 @@ func (kt *Keytab) AddEntryWithSalt(principalName, realm, password, salt string, 
 }
 
 // Create a new principal.
-func newPrincipal() principal {
+func newPrincipal() Principal {
 	var c []string
 
-	return principal{
+	return Principal{
 		NumComponents: 0,
 		Realm:         "",
 		Components:    c,
@@ -364,7 +383,7 @@ func (kt *Keytab) Unmarshal(b []byte) error {
 	return nil
 }
 
-func (e entry) marshal(v int) (b []byte, err error) {
+func (e Entry) marshal(v int) (b []byte, err error) {
 	pb, err := e.Principal.marshal(v)
 	if err != nil {
 		return b, err
@@ -410,7 +429,7 @@ func (e entry) marshal(v int) (b []byte, err error) {
 }
 
 // Parse the Keytab bytes of a principal into a Keytab entry's principal.
-func parsePrincipal(b []byte, p *int, kt *Keytab, ke *entry, e *binary.ByteOrder) error {
+func parsePrincipal(b []byte, p *int, kt *Keytab, ke *Entry, e *binary.ByteOrder) error {
 	var err error
 
 	ke.Principal.NumComponents, err = readInt16(b, p, e)
@@ -459,7 +478,7 @@ func parsePrincipal(b []byte, p *int, kt *Keytab, ke *entry, e *binary.ByteOrder
 	return nil
 }
 
-func (p principal) marshal(v int) ([]byte, error) {
+func (p Principal) marshal(v int) ([]byte, error) {
 	// var b []byte.
 	b := make([]byte, 2)
 
