@@ -155,7 +155,8 @@ full walkthrough for Go).
    string claim types (title, company, ...), 64 characters each, which
    makes AD compress her claims set (LZ77+Huffman).
 6. **`s4u.ps1`** (Go; the same password file): service accounts with
-   delegation policy and a sensitive user, for S4U2Self and S4U2Proxy.
+   delegation policy, a sensitive user and a user mapped to a certificate,
+   for S4U2Self and S4U2Proxy.
 7. **`trust.ps1`** (Goose; password in `C:\Goose\dc\trust.txt`): a
    two-way realm trust with MIT's A.TEST (`netdom trust /realm /twoway`,
    `ksetup` AES), the account mit-alice mapped to alice@A.TEST.
@@ -198,5 +199,8 @@ Go: see `test/ad/README.md` (`TEST_AD_DIR`, `TEST_AD_PASSWORD_FILE`,
   non-forwardable S4U2Self ticket; one with no delegation at all gets a
   forwardable one, which S4U2Proxy still refuses. The ticket is forwardable
   only if the service's TGT is. MIT's DB2 back end refuses S4U2Proxy.
+- S4U2Self by certificate: AD maps by `altSecurityIdentities` and took an
+  expired certificate of a CA it did not know. MIT's DB2 cannot map one
+  (`LOOKING_UP_S4U2SELF_PRINCIPAL`).
 - SASL GSSAPI binds work with no layer, integrity or confidentiality here;
   domains that require LDAP signing refuse the first.

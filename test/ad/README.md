@@ -145,6 +145,7 @@ All have the users' password, and never expiring. "AES" is
 | `svc-rbcd` | s4u | `HTTP/rbcd.goose.test`: no delegation of its own |
 | `svc-rbcdt` | s4u | `HTTP/rbcdt.goose.test`: lets svc-rbcd delegate to it (resource-based) |
 | `sens` | s4u | a user, "sensitive and cannot be delegated" |
+| `certie` | s4u | a user mapped to a certificate: `altSecurityIdentities` = `X509:<SKI>...`, the bytes of `goose-s4u-certie-ski` |
 
 And the group `GooseTesters`; the claim types `department` and `goose-title`,
 `-company`, `-streetAddress`, `-physicalDeliveryOfficeName`, `-displayName`,
@@ -170,7 +171,14 @@ GPO would set them).
 | A sensitive user: S4U2Proxy refused | the same | sens, svc-proxy |
 | Resource-based delegation, allowed and not | the same | svc-rbcd, svc-rbcdt, svc-target |
 | S4U armored with FAST | the same | svc-proxy |
+| S4U2Self by certificate, on to S4U2Proxy, armored; a certificate mapped to nobody; no protocol transition: not forwardable | `client`: `TestClient_S4UCert_AD` | certie, svc-proxy, svc-target, svc-kerb |
 | LDAP with SASL GSSAPI at each protection level, Who am I, SID lookups, tokenGroups against the PAC's groups | `ldap`: `TestAD_LDAP`, needing `TEST_AD_LDAP`, `TEST_AD_DC_HOST` | alice, GooseTesters, `web.keytab` |
+
+S4U2Self by certificate needs no CA on the DC. The test makes its certificates
+itself, RSA client certificates with the identifier `certie` is mapped to,
+from a CA the DC does not know. Server 2022's KDC issued tickets for those, and
+for an expired one. That shape is the only one known to work: keep new tests
+to it.
 
 ## When something is off
 

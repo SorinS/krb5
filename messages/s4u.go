@@ -56,10 +56,19 @@ type paS4UX509User struct {
 	Checksum types.Checksum `asn1:"explicit,tag:1"`
 }
 
-// An S4UUser is the user an S4U2Self request names.
+// An S4UUser is the user of an S4U2Self request, by name or by certificate.
 type S4UUser struct {
 	Name  types.PrincipalName
 	Realm string
+
+	// Cert is the user's certificate (DER), for the KDC to find the user by,
+	// Name then being empty: the reply says who it is.
+	Cert []byte
+}
+
+// byCert is whether the request leaves the name for the KDC to find.
+func (u *S4UUser) byCert() bool {
+	return len(u.Name.NameString) == 0
 }
 
 func marshalKrb(v any) ([]byte, error) {
@@ -95,13 +104,18 @@ func (u *S4UUser) paForUserData(sessionKey types.EncryptionKey) (types.PAData, e
 
 // paS4UData is the PA-S4U-X509-USER: S4UUserID with the request's nonce,
 // its checksum in the subkey. False for an old type's subkey, whose
-// checksum would be unkeyed (MS-SFU's RSA-MD4): PA-FOR-USER alone then.
+// checksum would be unkeyed (MS-SFU's RSA-MD4): PA-FOR-USER alone then, which
+// cannot carry a certificate.
 func (u *S4UUser) paS4UData(subkey types.EncryptionKey, nonce int) (types.PAData, bool, error) {
 	if subkey.KeyType == etypeID.RC4_HMAC || subkey.KeyType == etypeID.DES3_CBC_SHA1_KD {
+		if u.byCert() {
+			return types.PAData{}, false, fmt.Errorf("S4U2Self by certificate with a session key of type %d: its checksum would not be keyed", subkey.KeyType)
+		}
+
 		return types.PAData{}, false, nil
 	}
 
-	id := s4uUserID{Nonce: int64(uint32(nonce)), CName: u.Name, CRealm: u.Realm, Options: types.NewKrbFlags()}
+	id := s4uUserID{Nonce: int64(uint32(nonce)), CName: u.Name, CRealm: u.Realm, Cert: u.Cert, Options: types.NewKrbFlags()}
 	binary.BigEndian.PutUint32(id.Options.Bytes, s4uOptUseReplyKeyUsage)
 
 	der, err := marshalKrb(id)
@@ -132,6 +146,10 @@ func (u *S4UUser) paS4UData(subkey types.EncryptionKey, nonce int) (types.PAData
 // which S4U2Proxy needs; the KDC gives one only if the TGT is and policy
 // lets the service (see client.GetServiceTicketForUser).
 func NewS4U2SelfReqAt(service types.PrincipalName, paRealm, kdcRealm string, c *config.Config, tgt Ticket, sessionKey types.EncryptionKey, user S4UUser, now time.Time) (TGSReq, error) {
+	if user.byCert() && len(user.Cert) == 0 {
+		return TGSReq{}, errors.New("an S4U2Self request needs a user's name or certificate")
+	}
+
 	a, err := tgsReq(service, service, kdcRealm, false, c, now)
 	if err != nil {
 		return a, err
@@ -178,18 +196,26 @@ func (k *TGSReq) IsS4U2Proxy() bool {
 // VerifyS4U checks the reply to an S4U2Self request as MIT does: the client
 // is the user asked for (the KDC may rewrite an enterprise name), and when
 // the KDC echoed PA-S4U-X509-USER (an old KDC need not), the echo has our
-// nonce, the user, and a keyed checksum in the request's subkey. It needs
-// the reply's FAST padata in place of its own, when armored.
+// nonce, the user, and a keyed checksum in the request's subkey. A user found
+// by certificate has only that echo to say who it is, so it must be there.
+// It needs the reply's FAST padata in place of its own, when armored.
 func (k *TGSRep) VerifyS4U(tgsReq TGSReq) error {
 	u := tgsReq.S4UUser
 	if u == nil {
 		return nil
 	}
 
-	enterprise := u.Name.NameType == nametype.KRB_NT_ENTERPRISE
-	if !enterprise && (!k.CName.Equal(u.Name) || k.CRealm != u.Realm) {
+	byCert := u.byCert()
+	if byCert && k.CRealm != u.Realm {
+		return fmt.Errorf("the S4U2Self reply is for a user of %s, not %s", k.CRealm, u.Realm)
+	}
+
+	rewritable := byCert || u.Name.NameType == nametype.KRB_NT_ENTERPRISE
+	if !rewritable && (!k.CName.Equal(u.Name) || k.CRealm != u.Realm) {
 		return fmt.Errorf("the S4U2Self reply is for %s@%s, not %s@%s", k.CName.PrincipalNameString(), k.CRealm, u.Name.PrincipalNameString(), u.Realm)
 	}
+
+	var echoed bool
 
 	for _, pa := range k.PAData {
 		if pa.PADataType != patype.PA_FOR_X509_USER {
@@ -224,13 +250,19 @@ func (k *TGSRep) VerifyS4U(tgsReq TGSReq) error {
 			return errors.New("the KDC's PA-S4U-X509-USER checksum does not check")
 		}
 
-		if !enterprise && !echo.UserID.CName.Equal(u.Name) {
+		if !rewritable && !echo.UserID.CName.Equal(u.Name) {
 			return errors.New("the KDC's PA-S4U-X509-USER names another user")
 		}
 
-		if !k.CName.Equal(echo.UserID.CName) {
+		if len(echo.UserID.CName.NameString) == 0 || !k.CName.Equal(echo.UserID.CName) {
 			return errors.New("the S4U2Self reply's client is not the one the KDC's PA-S4U-X509-USER names")
 		}
+
+		echoed = true
+	}
+
+	if byCert && !echoed {
+		return errors.New("the S4U2Self reply to a request by certificate has no PA-S4U-X509-USER")
 	}
 
 	return nil

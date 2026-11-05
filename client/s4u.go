@@ -1,6 +1,8 @@
 package client
 
 import (
+	"crypto/x509"
+
 	"github.com/go-krb5/krb5/iana/nametype"
 	"github.com/go-krb5/krb5/krberror"
 	"github.com/go-krb5/krb5/messages"
@@ -36,6 +38,47 @@ func (cl *Client) GetServiceTicketForUser(user types.PrincipalName, userRealm st
 
 	req, err := messages.NewS4U2SelfReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey,
 		messages.S4UUser{Name: user, Realm: userRealm}, cl.Now())
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Self TGS_REQ")
+	}
+
+	_, rep, err := cl.TGSExchange(req, realm, tgt, skey, 0)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	return rep.Ticket, rep.DecryptedEncPart.Key, nil
+}
+
+// GetServiceTicketForCertificate is S4U2Self by the user's certificate: a
+// ticket to this client in the name of whoever the KDC maps cert to, in the
+// client's realm; the ticket and the KDC's checksummed reply say who it is.
+// Having a user's certificate proves nothing here, it is public: as with
+// GetServiceTicketForUser, the service vouches for the user, so it must have
+// validated cert and the user's possession of its key first. Do not count on
+// the KDC for that: Windows Server 2022's maps by altSecurityIdentities and
+// issued the ticket for an expired certificate of a CA it did not know. Nor
+// pass on a certificate unchecked. Ed25519 certificates are refused: they have
+// not been shown to work with Windows' KDC. MIT's DB2 back end does not do
+// this at all. The ticket is not cached.
+func (cl *Client) GetServiceTicketForCertificate(cert *x509.Certificate) (messages.Ticket, types.EncryptionKey, error) {
+	if cert == nil || len(cert.Raw) == 0 {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError, "S4U2Self by certificate needs a parsed certificate")
+	}
+
+	if cert.PublicKeyAlgorithm == x509.Ed25519 {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError, "S4U2Self by certificate does not take Ed25519 certificates")
+	}
+
+	realm := cl.Credentials.Domain()
+
+	tgt, skey, err := cl.sessionTGT(realm)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	req, err := messages.NewS4U2SelfReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey,
+		messages.S4UUser{Realm: realm, Cert: cert.Raw}, cl.Now())
 	if err != nil {
 		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Self TGS_REQ")
 	}

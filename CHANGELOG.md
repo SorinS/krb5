@@ -62,7 +62,13 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   allowed, a sensitive user; the target decrypts the ticket and reads
   alice's PAC and the delegation info) and MIT 1.22 (S4U2Self, PA-FOR-USER
   alone; its DB2 back end refuses S4U2Proxy). Not done: S4U2Self for a user
-  of another realm, and by certificate.
+  of another realm.
+- **S4U2Self by certificate:** `Client.GetServiceTicketForCertificate`: the
+  KDC finds the user, the reply's checksummed echo says who it is (required
+  here). RSA certificates tested, on the live AD with `altSecurityIdentities`
+  (X509:<SKI>), through to S4U2Proxy; MIT's DB2 cannot map one, so MIT is a
+  negative test. Windows' KDC took an expired certificate of an unknown CA: the
+  caller must validate it. Ed25519 certificates are refused.
 - `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
 - `test/ad` (was `test/windows`): a bare Windows Server to a DC with every
