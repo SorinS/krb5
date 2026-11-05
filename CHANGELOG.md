@@ -150,6 +150,10 @@ MIT's and Windows' tools are used as test oracles only.
   enctypes, `dns_canonicalize_hostname = fallback`.
 - `dns_lookup_kdc` now defaults to true, as MIT: a realm with no KDC
   configured has its KDCs found by DNS SRV records (BREAKING.md).
+- `keytab.AddEntryWithSalt`: a keytab entry with an explicit salt (Active
+  Directory salts a service account by its UPN or sAMAccountName, not its
+  SPN) and a `uint32` key version (AD's can exceed the 8-bit field, written
+  then in the format's 32-bit extension). `AddEntry` is unchanged.
 - Test substrate: `test/mitkdc/mitkdc.py` (two MIT realms on 127.0.0.1, one
   with its clock 900 s ahead), `test/ad/*.ps1` (an AD DC with claims),
   14 integration tests gated by `INTEGRATION=1` and `TEST_MIT_DIR` or
@@ -194,7 +198,6 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 - SPNEGO HTTP client: the redirect data race and Host rewrite.
 - SPNEGO with Kerberos not the first mechanism, and mechListMIC.
 - kpasswd's set-password form for AD.
-- keytab `AddEntryWithSalt`.
 - RC4 and DES3 GSS message tokens.
 
 ### Open decisions

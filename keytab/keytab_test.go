@@ -234,3 +234,72 @@ func TestKeytab_GetEncryptionKey(t *testing.T) {
 
 	assert.Equal(t, 3, kvno)
 }
+
+func TestAddEntryWithSalt(t *testing.T) {
+	const (
+		princ = "svc-web"
+		realm = "GOOSE.TEST"
+		pw    = "hello123"
+		et    = etypeID.AES256_CTS_HMAC_SHA1_96
+	)
+
+	ts := time.Unix(1000, 0)
+	pn := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, princ)
+
+	keyOf := func(kt *Keytab) []byte {
+		k, _, err := kt.GetEncryptionKey(pn, realm, 0, et)
+		require.NoError(t, err)
+
+		return k.KeyValue
+	}
+
+	// The default salt, which AddEntry uses.
+	def := New()
+	require.NoError(t, def.AddEntry(princ, realm, pw, ts, 1, et))
+
+	// An empty salt means that same default.
+	empty := New()
+	require.NoError(t, empty.AddEntryWithSalt(princ, realm, pw, "", ts, 1, et))
+	assert.Equal(t, keyOf(def), keyOf(empty), "empty salt is the default")
+
+	// The default salt spelled out gives the same key.
+	same := New()
+	require.NoError(t, same.AddEntryWithSalt(princ, realm, pw, pn.GetSalt(realm), ts, 1, et))
+	assert.Equal(t, keyOf(def), keyOf(same), "the default salt, explicit")
+
+	// A different salt (an AD-style one here) gives a different key.
+	ad := New()
+	require.NoError(t, ad.AddEntryWithSalt(princ, realm, pw, "GOOSE.TESTsvc-web@goose.test", ts, 1, et))
+	assert.NotEqual(t, keyOf(def), keyOf(ad), "a different salt, a different key")
+}
+
+func TestAddEntryWithSalt_LargeKVNO(t *testing.T) {
+	const (
+		princ = "svc-web"
+		realm = "GOOSE.TEST"
+		et    = etypeID.AES256_CTS_HMAC_SHA1_96
+	)
+
+	kvno := uint32(1000) // above the 8-bit field
+
+	kt := New()
+	require.NoError(t, kt.AddEntryWithSalt(princ, realm, "hello123", "", time.Unix(1000, 0), kvno, et))
+
+	// The full version is in the 32-bit field; the 8-bit field has the low byte.
+	require.Len(t, kt.Entries, 1)
+	assert.Equal(t, kvno, kt.Entries[0].KVNO)
+	assert.Equal(t, uint8(kvno), kt.Entries[0].KVNO8)
+
+	// It survives a round trip and is found by its full version.
+	b, err := kt.Marshal()
+	require.NoError(t, err)
+
+	back := new(Keytab)
+	require.NoError(t, back.Unmarshal(b))
+
+	pn := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, princ)
+
+	_, got, err := back.GetEncryptionKey(pn, realm, int(kvno), et)
+	require.NoError(t, err)
+	assert.Equal(t, int(kvno), got)
+}
