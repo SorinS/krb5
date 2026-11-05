@@ -102,6 +102,19 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   (so the client continues with KRB5) instead of rejecting the token, as
   long as KRB5 is somewhere in the list. The optimistic token of a
   non-preferred first mechanism is no longer misread as KRB5.
+- SPNEGO negotiation as a programmatic initiator and acceptor
+  (`spnego.NewInitiator`, `spnego.Accept`, with `(*spnego.Context).Continue`),
+  built on the Kerberos GSS context (gsskrb5). Unlike the stateless HTTP
+  handler (`SPNEGOKRB5Authenticate`, unchanged), these carry the AP-REP for
+  mutual authentication and exchange a mechListMIC (RFC 4178 section 5): the
+  acceptor verifies the initiator's and sends its own when more than Kerberos
+  was offered, and the initiator verifies the acceptor's and reciprocates.
+  Tested against MIT both ways — our initiator to MIT's gss-server and MIT's
+  gss-client -spnego to our acceptor, with mutual authentication and the MIC
+  round trip, and MIT rejecting a corrupted MIC. A lone optimistic Kerberos
+  offer uses no mechListMIC, as MIT does; the Windows NEGOEX-first path (where
+  the initiator continues with Kerberos in a later leg) is not yet driven to
+  completion and is unverified against Windows.
 - `Client.ChangePasswd` now uses the kpasswd change-password form (version 1,
   no target principal), which a KDC accepts from the user itself; it sent the
   set-password (reset) form before, which Active Directory refused without
@@ -218,9 +231,10 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 
 ### Not done yet (being done in the second round, above)
 
-- SPNEGO mechListMIC: produced and verified when the negotiation selects a
-  non-preferred mechanism (RFC 4178 section 5). Accepting KRB5 when it is
-  not the first mechanism offered is done (above).
+- SPNEGO NEGOEX-first negotiation driven to completion: the acceptor answers
+  accept-incomplete when KRB5 is not the first mechanism (done, above), but
+  the Kerberos continuation in the following leg, and the behaviour of a
+  Windows NEGOEX client, are not yet exercised.
 - RC4 and DES3 GSS message tokens.
 
 ### Open decisions
