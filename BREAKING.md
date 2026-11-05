@@ -40,6 +40,9 @@ More lenient, as MIT is:
 
 Other:
 
+- `dns_lookup_kdc` defaults to true (MIT's default), not false. A realm with KDCs listed in the configuration is
+  unaffected; a realm with none now has its KDCs resolved by DNS SRV records (`_kerberos._udp`/`_tcp`) rather than
+  failing. Set `dns_lookup_kdc = false` to keep the old behaviour.
 - A TGS request's authenticator has a subkey (`TGSReq.SubKey`, as MIT and Windows send), so the KDC encrypts the reply
   in it (usage 9); `TGSReq.SetPAData` keeps the request's other padata. `TGSRep.DecryptEncPartUsage` takes the key and
   usage.
