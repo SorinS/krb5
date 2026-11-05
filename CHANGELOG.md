@@ -91,6 +91,12 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
 
 ### Fixed
 
+- SPNEGO HTTP client: the redirect count is kept per `Do` call, not on the
+  shared `Client` (concurrent `Do` calls raced on it); the limit is
+  configurable (`Client.MaxRedirects`, default 10); and `setRequestSPN` no
+  longer overwrites the request's `Host` header with the canonical name,
+  which broke a virtual host behind a proxy (the canonical name is used for
+  the SPN only).
 - aes256-cts-hmac-sha384-192 keys are 32 bytes (were 24).
 - RC4: usage 9, usages of 128 and up, passwords outside the BMP (MIT's
   vectors).
@@ -195,7 +201,6 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 
 ### Not done yet (being done in the second round, above)
 
-- SPNEGO HTTP client: the redirect data race and Host rewrite.
 - SPNEGO with Kerberos not the first mechanism, and mechListMIC.
 - kpasswd's set-password form for AD.
 - RC4 and DES3 GSS message tokens.

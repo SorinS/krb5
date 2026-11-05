@@ -27,12 +27,20 @@ import (
 
 // Client side functionality.
 
+// defaultMaxRedirects is how many redirects Do follows when MaxRedirects is
+// not set.
+const defaultMaxRedirects = 10
+
 // Client will negotiate authentication with a server using SPNEGO.
 type Client struct {
 	*http.Client
 	krb5Client *client.Client
 	spn        string
-	reqs       []*http.Request
+
+	// MaxRedirects bounds the redirects Do follows before giving up. Zero
+	// means defaultMaxRedirects. The count is kept per call, so concurrent
+	// Do calls on one Client do not share it.
+	MaxRedirects int
 }
 
 type redirectErr struct {
@@ -83,6 +91,14 @@ func NewClient(krb5Cl *client.Client, httpCl *http.Client, spn string) *Client {
 
 // Do is the SPNEGO enabled HTTP client's equivalent of the http.Client's Do method.
 func (c *Client) Do(req *http.Request) (resp *http.Response, err error) {
+	return c.do(req, 0)
+}
+
+// do follows redirects and answers Negotiate challenges. redirects is how many
+// have been followed so far: a recursion-local count, so concurrent calls on
+// one Client do not share it (the earlier version kept it on the Client, a
+// data race).
+func (c *Client) do(req *http.Request, redirects int) (resp *http.Response, err error) {
 	var body bytes.Buffer
 	if req.Body != nil {
 		// Use a tee reader to capture any body sent in case we have to replay it again.
@@ -98,11 +114,13 @@ func (c *Client) Do(req *http.Request) (resp *http.Response, err error) {
 				// Picked up a redirect.
 				e.reqTarget.Header.Del(HTTPHeaderAuthRequest)
 
-				c.reqs = append(c.reqs, e.reqTarget)
-				if len(c.reqs) >= 10 {
-					c.reqs = c.reqs[:0]
+				max := c.MaxRedirects
+				if max <= 0 {
+					max = defaultMaxRedirects
+				}
 
-					return resp, errors.New("stopped after 10 redirects")
+				if redirects >= max {
+					return resp, fmt.Errorf("stopped after %d redirects", max)
 				}
 
 				if req.Body != nil {
@@ -110,7 +128,7 @@ func (c *Client) Do(req *http.Request) (resp *http.Response, err error) {
 					e.reqTarget.Body = io.NopCloser(&body)
 				}
 
-				return c.Do(e.reqTarget)
+				return c.do(e.reqTarget, redirects+1)
 			}
 		}
 
@@ -129,10 +147,8 @@ func (c *Client) Do(req *http.Request) (resp *http.Response, err error) {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 
-		return c.Do(req)
+		return c.do(req, redirects)
 	}
-
-	c.reqs = c.reqs[:0]
 
 	return resp, err
 }
@@ -184,36 +200,31 @@ func respUnauthorizedNegotiate(resp *http.Response) bool {
 	return false
 }
 
+// setRequestSPN derives the SPN (HTTP/<host>) for a request from its URL host,
+// canonicalized by its CNAME. It does not rewrite r.Host: the canonical name is
+// the service's Kerberos name, not where the request is sent, and overwriting
+// the Host header breaks a virtual host reached through a proxy or load
+// balancer.
 func setRequestSPN(r *http.Request) (types.PrincipalName, error) {
 	h := strings.TrimSuffix(r.URL.Host, ".")
 	// This if statement checks if the host includes a port number.
 	if strings.LastIndex(r.URL.Host, ":") > strings.LastIndex(r.URL.Host, "]") {
 		// There is a port number in the URL.
-		h, p, err := net.SplitHostPort(h)
+		host, _, err := net.SplitHostPort(h)
 		if err != nil {
 			return types.PrincipalName{}, err
 		}
 
-		name, err := net.LookupCNAME(h)
-		if name != "" && err == nil {
-			// Underlyng canonical name should be used for SPN.
-			h = strings.ToLower(name)
-		}
-
-		h = strings.TrimSuffix(h, ".")
-		r.Host = fmt.Sprintf("%s:%s", h, p)
-
-		return types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "HTTP/"+h), nil
+		h = host
 	}
 
 	name, err := net.LookupCNAME(h)
 	if name != "" && err == nil {
-		// Underlyng canonical name should be used for SPN.
+		// Underlying canonical name should be used for SPN.
 		h = strings.ToLower(name)
 	}
 
 	h = strings.TrimSuffix(h, ".")
-	r.Host = h
 
 	return types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "HTTP/"+h), nil
 }
