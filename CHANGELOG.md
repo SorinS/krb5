@@ -69,7 +69,11 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   (X509:<SKI>), through to S4U2Proxy; MIT's DB2 cannot map one, so MIT is a
   negative test. Windows' KDC took an expired certificate of an unknown CA: the
   caller must validate it. Ed25519 certificates are refused.
-- `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
+- `examples`: a program for each thing a caller does (a TGT, a service ticket,
+  a credential cache, cross-realm, S4U2Self, constrained delegation through to
+  the back end, SPNEGO server and client, GSS-API on a socket, LDAP, FAST,
+  PKINIT, keytabs), run against MIT's and AD's KDCs by `examples_test.go`.
+- `test/mitkdc`: B.TEST (a two-way trust with A.TEST), F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
 - `test/ad` (was `test/windows`): a bare Windows Server to a DC with every
   account the `*_AD` tests use: a README with the walkthrough and which test

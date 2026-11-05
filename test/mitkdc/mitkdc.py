@@ -24,6 +24,12 @@ ahead of ours (krb5kdc -T), for the clock skew tests:
     kim       password "kim-pw", pre-authentication required
     HTTP/svc.k.test   random key, in DIR/svc.keytab
 
+B.TEST, served by a krb5kdc of its own, trusts A.TEST and is trusted by it,
+both ways: krbtgt/B.TEST@A.TEST and krbtgt/A.TEST@B.TEST, same password:
+
+    bea       password "bea-pw", pre-authentication required
+    HTTP/svc.b.test   random keys, in DIR/b.keytab
+
 F.TEST, served by a krb5kdc whose encrypted-timestamp module is disabled
 ([plugins] kdcpreauth), so that a password works only through FAST's
 encrypted challenge:
@@ -81,6 +87,7 @@ from pki import Pki  # noqa: E402
 
 REALM_A = "A.TEST"
 REALM_K = "K.TEST"
+REALM_B = "B.TEST"
 REALM_F = "F.TEST"
 REALM_S = "S.TEST"
 REALM_O = "O.TEST"
@@ -89,6 +96,7 @@ PKINIT_REALMS = ("P.TEST", "Q.TEST", "R.TEST", "N.TEST")
 SAM_ETYPES = [("aes128", "aes128-cts-hmac-sha1-96"), ("aes256", "aes256-cts-hmac-sha1-96"),
               ("sha2-128", "aes128-cts-hmac-sha256-128"), ("sha2-256", "aes256-cts-hmac-sha384-192"),
               ("rc4", "arcfour-hmac"), ("cam128", "camellia128-cts-cmac"), ("cam256", "camellia256-cts-cmac")]
+TRUST_PW = "trust-a-b"
 AES = "aes256-cts-hmac-sha1-96:normal,aes128-cts-hmac-sha1-96:normal"
 NO_TIMESTAMP = """[plugins]
     kdcpreauth = {
@@ -142,6 +150,7 @@ class Kdc:
         self.quiet = quiet
         self.port_a = free_port()
         self.port_k = free_port()
+        self.port_b = free_port()
         self.port_f = free_port()
         self.port_s = free_port()
         self.port_o = free_port()
@@ -255,6 +264,9 @@ class Kdc:
     {REALM_K} = {{
         kdc = 127.0.0.1:{self.port_k}
     }}
+    {REALM_B} = {{
+        kdc = 127.0.0.1:{self.port_b}
+    }}
     {REALM_F} = {{
         kdc = 127.0.0.1:{self.port_f}
     }}
@@ -271,6 +283,8 @@ class Kdc:
     a.test = {REALM_A}
     .k.test = {REALM_K}
     k.test = {REALM_K}
+    .b.test = {REALM_B}
+    b.test = {REALM_B}
     .f.test = {REALM_F}
     .s.test = {REALM_S}
     .p.test = P.TEST
@@ -279,6 +293,7 @@ class Kdc:
         # holds its SPAKE groups, which no client reads.
         self.envs = {REALM_A: self.realm_conf("a", REALM_A, self.port_a),
                      REALM_K: self.realm_conf("k", REALM_K, self.port_k),
+                     REALM_B: self.realm_conf("b", REALM_B, self.port_b),
                      REALM_F: self.realm_conf("f", REALM_F, self.port_f, NO_TIMESTAMP),
                      REALM_S: self.realm_conf("s", REALM_S, self.port_s, NO_TIMESTAMP + """
 [libdefaults]
@@ -294,7 +309,7 @@ class Kdc:
             self.envs[r] = penv
 
     def create(self):
-        for r in (REALM_A, REALM_K, REALM_F, REALM_S, REALM_O) + PKINIT_REALMS:
+        for r in (REALM_A, REALM_K, REALM_B, REALM_F, REALM_S, REALM_O) + PKINIT_REALMS:
             self.run([self.bin("kdb5_util"), "-r", r, "create", "-s", "-P", "master-" + r.lower()], self.envs[r])
         a, k = REALM_A, REALM_K
         self.kadmin(a, "addprinc -pw alice-pw alice")
@@ -309,6 +324,13 @@ class Kdc:
         self.kadmin(k, "addprinc -pw kim-pw +requires_preauth kim")
         self.kadmin(k, "addprinc -randkey HTTP/svc.k.test")
         self.kadmin(k, f"ktadd -k {self.path('svc.keytab')} HTTP/svc.k.test")
+        b = REALM_B
+        self.kadmin(b, "addprinc -pw bea-pw +requires_preauth bea")
+        self.kadmin(b, "addprinc -randkey HTTP/svc.b.test")
+        self.kadmin(b, f"ktadd -k {self.path('b.keytab')} HTTP/svc.b.test")
+        for r in (a, b):
+            self.kadmin(r, f"addprinc -pw {TRUST_PW} krbtgt/{b}@{a}")
+            self.kadmin(r, f"addprinc -pw {TRUST_PW} krbtgt/{a}@{b}")
         f = REALM_F
         self.kadmin(f, "addprinc -pw grace-pw +requires_preauth grace")
         self.kadmin(f, f"addprinc -randkey -e {AES} host/fast.f.test")
@@ -335,7 +357,7 @@ class Kdc:
                                            stdout=out, stderr=out))
         self.procs.append(subprocess.Popen([self.bin("krb5kdc"), "-n", "-r", REALM_K, "-T", str(SKEW)],
                                            env=self.envs[REALM_K], stdout=out, stderr=out))
-        for r in (REALM_F, REALM_S, REALM_O):
+        for r in (REALM_B, REALM_F, REALM_S, REALM_O):
             self.procs.append(subprocess.Popen([self.bin("krb5kdc"), "-n", "-r", r], env=self.envs[r], stdout=out, stderr=out))
         self.procs.append(subprocess.Popen([self.bin("krb5kdc"), "-n"] + [x for r in PKINIT_REALMS for x in ("-r", r)],
                                            env=self.envs["P.TEST"], stdout=out, stderr=out))
@@ -344,7 +366,7 @@ class Kdc:
             if any(p.poll() is not None for p in self.procs):
                 raise RuntimeError("krb5kdc exited: see the kdc-*.log files in " + self.dir)
             try:
-                for port in (self.port_a, self.port_k, self.port_f, self.port_s, self.port_o, *self.ports_p.values()):
+                for port in (self.port_a, self.port_k, self.port_b, self.port_f, self.port_s, self.port_o, *self.ports_p.values()):
                     socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
                 break
             except OSError:
@@ -390,7 +412,7 @@ def main():
     with Kdc(args.dir, args.mit, quiet=False) as k:
         print(f"TEST_MIT_DIR={k.dir}")
         print(f"A.TEST on 127.0.0.1:{k.port_a}, K.TEST on 127.0.0.1:{k.port_k} (clock +{SKEW}s), "
-              f"F.TEST :{k.port_f}, S.TEST :{k.port_s}, O.TEST :{k.port_o}, "
+              f"B.TEST :{k.port_b}, F.TEST :{k.port_f}, S.TEST :{k.port_s}, O.TEST :{k.port_o}, "
               + ", ".join(f"{r} :{p}" for r, p in k.ports_p.items()) + "; Ctrl-C to stop")
         sys.stdout.flush()
         try:
