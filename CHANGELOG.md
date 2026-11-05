@@ -102,6 +102,11 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   (so the client continues with KRB5) instead of rejecting the token, as
   long as KRB5 is somewhere in the list. The optimistic token of a
   non-preferred first mechanism is no longer misread as KRB5.
+- `Client.ChangePasswd` now uses the kpasswd change-password form (version 1,
+  no target principal), which a KDC accepts from the user itself; it sent the
+  set-password (reset) form before, which Active Directory refused without
+  the reset right. `Client.SetPasswd` is the reset form, for an administrator
+  changing another principal's password (`kadmin.SetPasswdMsg`).
 - aes256-cts-hmac-sha384-192 keys are 32 bytes (were 24).
 - RC4: usage 9, usages of 128 and up, passwords outside the BMP (MIT's
   vectors).
@@ -214,7 +219,6 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 - SPNEGO mechListMIC: produced and verified when the negotiation selects a
   non-preferred mechanism (RFC 4178 section 5). Accepting KRB5 when it is
   not the first mechanism offered is done (above).
-- kpasswd's set-password form for AD.
 - RC4 and DES3 GSS message tokens.
 
 ### Open decisions

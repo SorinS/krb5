@@ -11,10 +11,26 @@ import (
 	"github.com/go-krb5/krb5/types"
 )
 
+// kpasswd protocol version numbers (RFC 3244).
+const (
+	// verChangePassword is the original change-password protocol: the user
+	// data is the new password itself, and a principal may change its own
+	// without special rights.
+	verChangePassword uint16 = 0x0001
+	// verSetPassword is Microsoft's set-password protocol: the user data is
+	// ChangePasswdData, which may target another principal (a privileged
+	// reset).
+	verSetPassword uint16 = 0xff80
+)
+
 // Request message for changing password.
 type Request struct {
 	APREQ   messages.APReq
 	KRBPriv messages.KRBPriv
+	// Version is the kpasswd protocol version (verChangePassword or
+	// verSetPassword). Zero marshals as verSetPassword, this type's
+	// historical default.
+	Version uint16
 }
 
 // Reply message for a password change.
@@ -32,7 +48,13 @@ type Reply struct {
 
 // Marshal a Request into a byte slice.
 func (m *Request) Marshal() (b []byte, err error) {
-	b = []byte{255, 128}
+	ver := m.Version
+	if ver == 0 {
+		ver = verSetPassword
+	}
+
+	b = make([]byte, 2)
+	binary.BigEndian.PutUint16(b, ver)
 
 	ab, e := m.APREQ.Marshal()
 	if e != nil {
