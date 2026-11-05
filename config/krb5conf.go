@@ -95,7 +95,8 @@ type LibDefaults struct {
 	// canonicalized only when it fails as it is.
 	DNSCanonicalizeHostnameFallback bool
 
-	// DNSLookupKDC has a default value of false.
+	// DNSLookupKDC has a default value of true, as MIT: with no KDC
+	// configured for a realm, its KDCs are found by DNS SRV records.
 	DNSLookupKDC bool
 
 	DNSLookupRealm bool
@@ -187,6 +188,7 @@ func newLibDefaults() LibDefaults {
 		DefaultTGSEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "aes256-cts-hmac-sha384-192", "aes128-cts-hmac-sha256-128", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
 		DefaultTktEnctypes:      []string{"aes256-cts-hmac-sha1-96", "aes128-cts-hmac-sha1-96", "aes256-cts-hmac-sha384-192", "aes128-cts-hmac-sha256-128", "des3-cbc-sha1", "arcfour-hmac-md5", "camellia256-cts-cmac", "camellia128-cts-cmac", "des-cbc-crc", "des-cbc-md5", "des-cbc-md4"},
 		DNSCanonicalizeHostname: true,
+		DNSLookupKDC:            true,
 		K5LoginDirectory:        hdir,
 		KDCDefaultOptions:       opts,
 		KDCTimeSync:             1,

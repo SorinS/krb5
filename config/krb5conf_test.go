@@ -689,3 +689,31 @@ func TestJSON(t *testing.T) {
 
 	t.Log(j)
 }
+
+func TestDNSLookupKDCDefault(t *testing.T) {
+	t.Parallel()
+
+	// MIT's default: with no dns_lookup_kdc line, it is on.
+	on, err := NewFromString("[libdefaults]\n    default_realm = A.TEST\n")
+	require.NoError(t, err)
+	assert.True(t, on.LibDefaults.DNSLookupKDC, "default")
+
+	// New() alone has it on too.
+	assert.True(t, New().LibDefaults.DNSLookupKDC, "New")
+
+	// An explicit false is still honoured.
+	off, err := NewFromString("[libdefaults]\n    dns_lookup_kdc = false\n")
+	require.NoError(t, err)
+	assert.False(t, off.LibDefaults.DNSLookupKDC, "explicit false")
+
+	// A realm with its KDC listed does not do SRV even with lookup on; the
+	// configured KDC is returned.
+	withKDC, err := NewFromString("[realms]\n    A.TEST = {\n        kdc = 127.0.0.1:88\n    }\n")
+	require.NoError(t, err)
+	assert.True(t, withKDC.LibDefaults.DNSLookupKDC)
+
+	count, kdcs, err := withKDC.GetKDCs("A.TEST", true)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, "127.0.0.1:88", kdcs[1])
+}
