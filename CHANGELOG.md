@@ -106,7 +106,9 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   no target principal), which a KDC accepts from the user itself; it sent the
   set-password (reset) form before, which Active Directory refused without
   the reset right. `Client.SetPasswd` is the reset form, for an administrator
-  changing another principal's password (`kadmin.SetPasswdMsg`).
+  changing another principal's password (`kadmin.SetPasswdMsg`). Both are
+  tested live against a kadmind (test/mitkdc now runs one), including a reset
+  refused without the privilege.
 - aes256-cts-hmac-sha384-192 keys are 32 bytes (were 24).
 - RC4: usage 9, usages of 128 and up, passwords outside the BMP (MIT's
   vectors).

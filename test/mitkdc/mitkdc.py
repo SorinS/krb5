@@ -12,6 +12,10 @@ A.TEST, served by one krb5kdc on a free loopback port (UDP and TCP):
 
     alice     password "alice-pw", aes, sha2, rc4 and camellia keys
     bob       password "bob-pw", pre-authentication required
+    chpw      password "chpw-pw", pre-auth: changes its own password (kpasswd)
+    chpw-target  password "chpw-target-pw": reset by chpw-admin
+    chpw-admin   password "chpw-admin-pw", pre-auth: may reset chpw-target
+                 (kadm5.acl grants it "c"); A.TEST runs a kadmind for this
     HTTP/svc.a.test, host/svc.a.test   random keys, in DIR/svc.keytab
     HTTP/proxy.a.test  random keys, in DIR/s4u.keytab, +ok_to_auth_as_delegate
     HTTP/self.a.test   random keys, in DIR/s4u.keytab: without it (S4U)
@@ -149,6 +153,9 @@ class Kdc:
         self.dir = directory or tempfile.mkdtemp(prefix="mitkdc-")
         self.quiet = quiet
         self.port_a = free_port()
+        # A.TEST also runs a kadmind for the kpasswd tests, on known ports.
+        self.port_kadmin_a = free_port()
+        self.port_kpasswd_a = free_port()
         self.port_k = free_port()
         self.port_b = free_port()
         self.port_f = free_port()
@@ -179,15 +186,24 @@ class Kdc:
     def realm_block(self, name, realm, port, more=""):
         d = self.dir
         os.makedirs(self.path(name), exist_ok=True)
-        open(self.path(f"{name}/kadm5.acl"), "w").close()
+        # A.TEST's kadmind serves kpasswd on known ports, and its ACL lets
+        # chpw-admin reset chpw-target's password (the SetPasswd test); every
+        # other realm has an empty ACL and throwaway admin ports (no kadmind).
+        if realm == REALM_A:
+            kadmin_port, kpasswd_port = self.port_kadmin_a, self.port_kpasswd_a
+            with open(self.path(f"{name}/kadm5.acl"), "w") as f:
+                f.write(f"chpw-admin@{REALM_A} c chpw-target@{REALM_A}\n")
+        else:
+            kadmin_port, kpasswd_port = free_port(), free_port()
+            open(self.path(f"{name}/kadm5.acl"), "w").close()
         return f"""    {realm} = {{
         database_name = {d}/{name}/principal
         key_stash_file = {d}/{name}/stash
         acl_file = {d}/{name}/kadm5.acl
         kdc_listen = 127.0.0.1:{port}
         kdc_tcp_listen = 127.0.0.1:{port}
-        kadmind_listen = 127.0.0.1:{free_port()}
-        kpasswd_listen = 127.0.0.1:{free_port()}
+        kadmind_listen = 127.0.0.1:{kadmin_port}
+        kpasswd_listen = 127.0.0.1:{kpasswd_port}
         master_key_type = aes256-cts
         supported_enctypes = {ENCTYPES}
         max_life = 10h
@@ -260,6 +276,8 @@ class Kdc:
 [realms]
     {REALM_A} = {{
         kdc = 127.0.0.1:{self.port_a}
+        admin_server = 127.0.0.1:{self.port_kadmin_a}
+        kpasswd_server = 127.0.0.1:{self.port_kpasswd_a}
     }}
     {REALM_K} = {{
         kdc = 127.0.0.1:{self.port_k}
@@ -314,6 +332,11 @@ class Kdc:
         a, k = REALM_A, REALM_K
         self.kadmin(a, "addprinc -pw alice-pw alice")
         self.kadmin(a, "addprinc -pw bob-pw +requires_preauth bob")
+        # The kpasswd test principals: chpw changes its own password, and
+        # chpw-admin resets chpw-target's (the ACL grants it; see realm_block).
+        self.kadmin(a, "addprinc -pw chpw-pw +requires_preauth chpw")
+        self.kadmin(a, "addprinc -pw chpw-target-pw +requires_preauth chpw-target")
+        self.kadmin(a, "addprinc -pw chpw-admin-pw +requires_preauth chpw-admin")
         self.kadmin(a, "addprinc -randkey HTTP/svc.a.test")
         self.kadmin(a, "addprinc -randkey host/svc.a.test")
         self.kadmin(a, f"ktadd -k {self.path('svc.keytab')} HTTP/svc.a.test host/svc.a.test")
@@ -361,12 +384,16 @@ class Kdc:
             self.procs.append(subprocess.Popen([self.bin("krb5kdc"), "-n", "-r", r], env=self.envs[r], stdout=out, stderr=out))
         self.procs.append(subprocess.Popen([self.bin("krb5kdc"), "-n"] + [x for r in PKINIT_REALMS for x in ("-r", r)],
                                            env=self.envs["P.TEST"], stdout=out, stderr=out))
+        # A.TEST's kadmind, for the kpasswd (change/set password) tests.
+        self.procs.append(subprocess.Popen([self.bin("kadmind"), "-nofork", "-r", REALM_A],
+                                           env=self.envs[REALM_A], stdout=out, stderr=out))
         deadline = time.time() + 10
         while time.time() < deadline:
             if any(p.poll() is not None for p in self.procs):
-                raise RuntimeError("krb5kdc exited: see the kdc-*.log files in " + self.dir)
+                raise RuntimeError("krb5kdc or kadmind exited: see the kdc-*.log files in " + self.dir)
             try:
-                for port in (self.port_a, self.port_k, self.port_b, self.port_f, self.port_s, self.port_o, *self.ports_p.values()):
+                for port in (self.port_a, self.port_k, self.port_b, self.port_f, self.port_s, self.port_o,
+                             self.port_kadmin_a, *self.ports_p.values()):
                     socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
                 break
             except OSError:
@@ -376,6 +403,7 @@ class Kdc:
         with open(self.path("env"), "w") as f:
             f.write(f"KRB5_CONFIG={self.path('krb5.conf')}\nTEST_MIT_DIR={self.dir}\n"
                     f"TEST_MIT_PORT_A={self.port_a}\nTEST_MIT_PORT_K={self.port_k}\nTEST_MIT_SKEW={SKEW}\n"
+                    f"TEST_MIT_PORT_KPASSWD_A={self.port_kpasswd_a}\n"
                     f"TEST_MIT_BIN={os.path.dirname(self.bin('klist'))}\n")
 
     def stop(self):
@@ -411,7 +439,8 @@ def main():
     signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
     with Kdc(args.dir, args.mit, quiet=False) as k:
         print(f"TEST_MIT_DIR={k.dir}")
-        print(f"A.TEST on 127.0.0.1:{k.port_a}, K.TEST on 127.0.0.1:{k.port_k} (clock +{SKEW}s), "
+        print(f"A.TEST on 127.0.0.1:{k.port_a} (kadmind/kpasswd :{k.port_kadmin_a}/:{k.port_kpasswd_a}), "
+              f"K.TEST on 127.0.0.1:{k.port_k} (clock +{SKEW}s), "
               f"B.TEST :{k.port_b}, F.TEST :{k.port_f}, S.TEST :{k.port_s}, O.TEST :{k.port_o}, "
               + ", ".join(f"{r} :{p}" for r, p in k.ports_p.items()) + "; Ctrl-C to stop")
         sys.stdout.flush()

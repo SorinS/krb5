@@ -22,7 +22,9 @@ Ctrl-C:
   required), `HTTP/svc.a.test` and `host/svc.a.test` in `svc.keytab`, and
   the realm's krbtgt keys in `krbtgt.keytab` (for checking the KDC's PAC
   signatures), `HTTP/proxy.a.test` (`+ok_to_auth_as_delegate`) and
-  `HTTP/self.a.test` in `s4u.keytab`;
+  `HTTP/self.a.test` in `s4u.keytab`; chpw (`chpw-pw`), chpw-target
+  (`chpw-target-pw`) and chpw-admin (`chpw-admin-pw`, may reset chpw-target)
+  for the kpasswd tests, served by a kadmind this realm also runs;
 - `K.TEST`: kim (`kim-pw`), `HTTP/svc.k.test`, served by a second krb5kdc
   whose clock runs 900 seconds ahead (`krb5kdc -T`), for clock skew.
 - `B.TEST`: bea (`bea-pw`), `HTTP/svc.b.test` in `b.keytab`; a two-way trust
