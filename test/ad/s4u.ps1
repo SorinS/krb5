@@ -13,6 +13,11 @@
 #   svc-rbcdt   HTTP/rbcdt.goose.test: lets svc-rbcd delegate to it
 #               (resource-based, PrincipalsAllowedToDelegateToAccount)
 #   sens        a user with "account is sensitive and cannot be delegated"
+#   certie      a user mapped to a certificate by subject key identifier, the
+#               strong mapping of KB5014754: the tests make certificates with
+#               this identifier ("goose-s4u-certie-ski"), for S4U2Self by
+#               certificate. The KDC checks no more than the mapping: no CA
+#               need be trusted, so a mapping is all there is to set up.
 #
 #   powershell -ExecutionPolicy Bypass -File C:\Goose\scripts\s4u.ps1
 param([string]$Domain = (Get-ADDomain).DNSRoot)
@@ -41,14 +46,16 @@ Ensure-User 'svc-target' "HTTP/target.$Domain"
 Ensure-User 'svc-rbcd'   "HTTP/rbcd.$Domain"
 Ensure-User 'svc-rbcdt'  "HTTP/rbcdt.$Domain"
 Ensure-User 'sens'       $null
+Ensure-User 'certie'     $null
 
 Set-ADAccountControl -Identity 'svc-proxy' -TrustedToAuthForDelegation $true
 Set-ADUser -Identity 'svc-proxy' -Replace @{ 'msDS-AllowedToDelegateTo' = "HTTP/target.$Domain" }
 Set-ADUser -Identity 'svc-kerb' -Replace @{ 'msDS-AllowedToDelegateTo' = "HTTP/target.$Domain" }
 Set-ADUser -Identity 'svc-rbcdt' -PrincipalsAllowedToDelegateToAccount (Get-ADUser 'svc-rbcd')
 Set-ADAccountControl -Identity 'sens' -AccountNotDelegated $true
+Set-ADUser -Identity 'certie' -Replace @{ altSecurityIdentities = 'X509:<SKI>676F6F73652D7334752D6365727469652D736B69' }
 
-foreach ($n in 'svc-proxy', 'svc-kerb', 'svc-self', 'svc-target', 'svc-rbcd', 'svc-rbcdt', 'sens') {
+foreach ($n in 'svc-proxy', 'svc-kerb', 'svc-self', 'svc-target', 'svc-rbcd', 'svc-rbcdt', 'sens', 'certie') {
     Get-ADUser -Identity $n -Properties ServicePrincipalNames, TrustedToAuthForDelegation, AccountNotDelegated,
         'msDS-AllowedToDelegateTo', PrincipalsAllowedToDelegateToAccount |
         Select-Object SamAccountName, TrustedToAuthForDelegation, AccountNotDelegated,

@@ -1,7 +1,9 @@
 package client_test
 
 import (
+	"crypto/x509"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -153,4 +155,32 @@ func TestClient_S4U_MIT(t *testing.T) {
 
 	_, _, err = cl.GetServiceTicketForUser(alice, "K.TEST")
 	require.ErrorContains(t, err, "another realm")
+}
+
+// S4U2Self by certificate: MIT's DB2 back end cannot map one. That the KDC gets
+// as far as asking it says the request decoded and its checksum verified: a
+// bad one gets another answer.
+func TestClient_S4UCert_MIT(t *testing.T) {
+	dir := test.MIT(t)
+	cfg := mitConfig(t, dir)
+
+	kt, err := keytab.Load(filepath.Join(dir, "s4u.keytab"))
+	require.NoError(t, err)
+
+	cl := client.NewWithKeytab("HTTP/proxy.a.test", "A.TEST", kt, cfg)
+	require.NoError(t, cl.Login())
+
+	_, _, err = cl.GetServiceTicketForCertificate(&x509.Certificate{Raw: []byte{0x30, 0x03, 0x02, 0x01, 0x07}})
+	require.Error(t, err)
+
+	var kerr messages.KRBError
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	t.Logf("%v", err)
+
+	log, err := os.ReadFile(filepath.Join(dir, "kdc-a.log"))
+	require.NoError(t, err)
+	assert.Contains(t, string(log), "LOOKING_UP_S4U2SELF_PRINCIPAL")
+
+	_, _, err = cl.GetServiceTicketForCertificate(nil)
+	require.Error(t, err)
 }

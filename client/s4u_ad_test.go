@@ -1,7 +1,13 @@
 package client_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
+	"math/big"
 	"path/filepath"
 	"testing"
 	"time"
@@ -182,4 +188,133 @@ func TestClient_S4U_AD(t *testing.T) {
 	at, _, err := armored.GetServiceTicketForProxy("HTTP/target.goose.test", as)
 	require.NoError(t, err)
 	readPAC(t, &at, "svc-target", password)
+}
+
+// s4uCertSKI is the subject key identifier certie is mapped to (test/ad/s4u.ps1).
+var s4uCertSKI = []byte("goose-s4u-certie-ski")
+
+// s4uCert is an RSA client certificate with the subject key identifier given,
+// valid in the time given, issued by a CA made here, which the DC does not
+// know.
+func s4uCert(t *testing.T, ski []byte, notBefore, notAfter time.Time) *x509.Certificate {
+	t.Helper()
+
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	caTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{Organization: []string{"Goose Test"}, CommonName: "Goose S4U CA"},
+		NotBefore:             notBefore.Add(-time.Hour),
+		NotAfter:              notAfter.Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, caKey.Public(), caKey)
+	require.NoError(t, err)
+
+	ca, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{Organization: []string{"Goose Test"}, CommonName: "somebody"},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		SubjectKeyId:          ski,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, key.Public(), caKey)
+	require.NoError(t, err)
+
+	c, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return c
+}
+
+// S4U2Self by certificate against a live AD (test/ad/s4u.ps1 maps certie).
+func TestClient_S4UCert_AD(t *testing.T) {
+	dir, password := test.ADLive(t)
+
+	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
+	require.NoError(t, err)
+
+	cfg.LibDefaults.Forwardable = true
+
+	proxy := client.NewWithPassword("svc-proxy", "GOOSE.TEST", password, cfg)
+	require.NoError(t, proxy.Login())
+
+	now := time.Now()
+	cert := s4uCert(t, s4uCertSKI, now.Add(-time.Hour), now.Add(time.Hour))
+
+	// The KDC finds the user: the name comes from the reply, checked by
+	// VerifyS4U against the echo, and the PAC agrees.
+	self, _, err := proxy.GetServiceTicketForCertificate(cert)
+	require.NoError(t, err)
+
+	p := readPAC(t, &self, "svc-proxy", password)
+	assert.Equal(t, "certie", self.DecryptedEncPart.CName.PrincipalNameString())
+	assert.Equal(t, "GOOSE.TEST", self.DecryptedEncPart.CRealm)
+	assert.Equal(t, "certie", p.ClientInfo.Name)
+	assert.True(t, types.IsFlagSet(&self.DecryptedEncPart.Flags, flags.Forwardable))
+
+	// It goes on to S4U2Proxy as any S4U2Self ticket does.
+	target, _, err := proxy.GetServiceTicketForProxy("HTTP/target.goose.test", self)
+	require.NoError(t, err)
+
+	p = readPAC(t, &target, "svc-target", password)
+	assert.Equal(t, "certie", p.ClientInfo.Name)
+	require.NotNil(t, p.S4UDelegationInfo)
+
+	// Armored by FAST too.
+	armor, err := proxy.Armor()
+	require.NoError(t, err)
+
+	armored := client.NewWithPassword("svc-proxy", "GOOSE.TEST", password, cfg, client.FASTArmor(armor))
+	require.NoError(t, armored.Login())
+
+	as, _, err := armored.GetServiceTicketForCertificate(cert)
+	require.NoError(t, err)
+	assert.Equal(t, "certie", readPAC(t, &as, "svc-proxy", password).ClientInfo.Name)
+
+	// A service with delegation targets but no protocol transition gets a
+	// ticket that is not forwardable, as by name.
+	kerb := client.NewWithPassword("svc-kerb", "GOOSE.TEST", password, cfg)
+	require.NoError(t, kerb.Login())
+
+	kt, _, err := kerb.GetServiceTicketForCertificate(cert)
+	require.NoError(t, err)
+
+	readPAC(t, &kt, "svc-kerb", password)
+	assert.False(t, types.IsFlagSet(&kt.DecryptedEncPart.Flags, flags.Forwardable))
+
+	// A certificate mapped to nobody.
+	_, _, err = proxy.GetServiceTicketForCertificate(s4uCert(t, []byte("goose-s4u-nobody-ski"), now.Add(-time.Hour), now.Add(time.Hour)))
+	require.Error(t, err)
+
+	var kerr messages.KRBError
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	assert.Equal(t, errorcode.KDC_ERR_C_PRINCIPAL_UNKNOWN, kerr.ErrorCode)
+
+	// The CA above is unknown to the DC, and an expired certificate does as
+	// well (Server 2022): what the caller does not check, nobody does.
+	_, _, err = proxy.GetServiceTicketForCertificate(s4uCert(t, s4uCertSKI, now.Add(-48*time.Hour), now.Add(-24*time.Hour)))
+	t.Logf("expired: %v", err)
+
+	// Refused here, before any KDC sees it.
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	_, _, err = proxy.GetServiceTicketForCertificate(&x509.Certificate{Raw: []byte{0x30}, PublicKeyAlgorithm: x509.Ed25519, PublicKey: key.Public()})
+	require.Error(t, err)
+	assert.False(t, errors.As(err, &kerr))
 }

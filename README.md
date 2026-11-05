@@ -36,7 +36,7 @@ this is his org, and we're just the current stewards.
     exchanges armored implicitly, and explicitly by a device's TGT for Active Directory's compound identity
     (`FASTDeviceArmor`)
   * SPAKE pre-authentication (MIT 1.17+; package `spake`): no offline password guessing from a captured exchange
-  * S4U (MS-SFU): a service acting for a user: `GetServiceTicketForUser` (S4U2Self), `GetServiceTicketForProxy`
+  * S4U (MS-SFU): a service acting for a user: `GetServiceTicketForUser` and `GetServiceTicketForCertificate` (S4U2Self), `GetServiceTicketForProxy`
     (S4U2Proxy: constrained and resource-based delegation)
   * PKINIT (package `pkinit`): a TGT from an X.509 certificate (`NewWithPKINIT`), or anonymously (`NewAnonymous`, whose
     TGT can armor FAST)

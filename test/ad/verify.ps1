@@ -25,7 +25,7 @@ Check 'KDC: CbacAndArmorLevel = 1' ($kdc -and $kdc.CbacAndArmorLevel -eq 1)
 function Account($name) {
     Get-ADUser -Filter "sAMAccountName -eq '$name'" -Properties ServicePrincipalNames, TrustedToAuthForDelegation,
         AccountNotDelegated, 'msDS-AllowedToDelegateTo', PrincipalsAllowedToDelegateToAccount,
-        'msDS-SupportedEncryptionTypes', Department
+        'msDS-SupportedEncryptionTypes', Department, altSecurityIdentities
 }
 function CheckUser($name, $etypes, $spns) {
     $u = Account $name
@@ -73,6 +73,8 @@ Check 'svc-self: no delegation' (-not (Account 'svc-self').TrustedToAuthForDeleg
     (Account 'svc-self').'msDS-AllowedToDelegateTo'.Count -eq 0)
 Check 'svc-rbcdt: lets svc-rbcd delegate to it' ((Account 'svc-rbcdt').PrincipalsAllowedToDelegateToAccount -contains (Account 'svc-rbcd').DistinguishedName)
 Check 'sens: cannot be delegated' ((Account 'sens').AccountNotDelegated)
+CheckUser 'certie' 0x18 @()
+Check 'certie: mapped to a certificate' ((Account 'certie').altSecurityIdentities -contains 'X509:<SKI>676F6F73652D7334752D6365727469652D736B69')
 
 Check 'keytab C:\Goose\dc\web.keytab' (Test-Path C:\Goose\dc\web.keytab)
 Check 'no password file left behind' (-not ((Test-Path C:\Goose\dc\users.txt) -or (Test-Path C:\Goose\dc\p.txt) -or (Test-Path C:\Goose\dc_p.txt)))

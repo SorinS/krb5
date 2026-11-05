@@ -379,12 +379,14 @@ func (k *TGSReq) SetPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 	}
 
 	if k.S4UUser != nil {
-		pfu, err := k.S4UUser.paForUserData(sessionKey)
-		if err != nil {
-			return krberror.Errorf(err, krberror.ChksumError, "error making PA-FOR-USER")
-		}
+		if !k.S4UUser.byCert() {
+			pfu, err := k.S4UUser.paForUserData(sessionKey)
+			if err != nil {
+				return krberror.Errorf(err, krberror.ChksumError, "error making PA-FOR-USER")
+			}
 
-		pas = append(pas, pfu)
+			pas = append(pas, pfu)
+		}
 
 		x509u, ok, err := k.S4UUser.paS4UData(k.SubKey, k.ReqBody.Nonce)
 		if err != nil {
