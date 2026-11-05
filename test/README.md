@@ -25,6 +25,8 @@ Ctrl-C:
   `HTTP/self.a.test` in `s4u.keytab`;
 - `K.TEST`: kim (`kim-pw`), `HTTP/svc.k.test`, served by a second krb5kdc
   whose clock runs 900 seconds ahead (`krb5kdc -T`), for clock skew.
+- `B.TEST`: bea (`bea-pw`), `HTTP/svc.b.test` in `b.keytab`; a two-way trust
+  with `A.TEST`, for cross-realm.
 - `F.TEST`: grace (`grace-pw`), `host/fast.f.test` (in `fast.keytab`: its
   TGT is the FAST armor), `HTTP/svc.f.test`; its KDC has no encrypted
   timestamp, so a password works only through FAST's encrypted challenge.
