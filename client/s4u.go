@@ -1,0 +1,78 @@
+package client
+
+import (
+	"github.com/go-krb5/krb5/iana/nametype"
+	"github.com/go-krb5/krb5/krberror"
+	"github.com/go-krb5/krb5/messages"
+	"github.com/go-krb5/krb5/types"
+)
+
+// GetServiceTicketForUser is S4U2Self (MS-SFU): a ticket to this client (a
+// service, with its own TGT) in the name of user, who need not have
+// authenticated to it. The ticket's PAC says who the user is. It is
+// forwardable, so that S4U2Proxy can use it, only if the client's TGT is
+// (forwardable in krb5.conf); AD and MIT deny it to a service with
+// delegation targets but without protocol transition
+// (TrustedToAuthForDelegation, ok_to_auth_as_delegate). The ticket is not
+// cached: GetServiceTicket's are the client's own.
+//
+// The user must be in the client's realm: the walk of referrals across
+// realms that S4U2Self needs otherwise is not done.
+func (cl *Client) GetServiceTicketForUser(user types.PrincipalName, userRealm string) (messages.Ticket, types.EncryptionKey, error) {
+	realm := cl.Credentials.Domain()
+	if userRealm == "" {
+		userRealm = realm
+	}
+
+	if userRealm != realm {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError,
+			"S4U2Self for a user of another realm (%s, ours is %s) is not supported", userRealm, realm)
+	}
+
+	tgt, skey, err := cl.sessionTGT(realm)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	req, err := messages.NewS4U2SelfReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey,
+		messages.S4UUser{Name: user, Realm: userRealm}, cl.Now())
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Self TGS_REQ")
+	}
+
+	_, rep, err := cl.TGSExchange(req, realm, tgt, skey, 0)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	return rep.Ticket, rep.DecryptedEncPart.Key, nil
+}
+
+// GetServiceTicketForProxy is S4U2Proxy (MS-SFU): a ticket to spn
+// (<SERVICE>/<FQDN>) in the name of evidence's client, evidence being a
+// ticket to this client, from GetServiceTicketForUser or the one the user
+// presented. The KDC must allow it: AD's msDS-AllowedToDelegateTo on this
+// service (which then wants evidence forwardable), or
+// msDS-AllowedToActOnBehalfOfOtherIdentity on the target (resource-based);
+// MIT's DB2 back end refuses it. The ticket is not cached.
+func (cl *Client) GetServiceTicketForProxy(spn string, evidence messages.Ticket) (messages.Ticket, types.EncryptionKey, error) {
+	realm := cl.Credentials.Domain()
+	sname := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, spn)
+
+	tgt, skey, err := cl.sessionTGT(realm)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	req, err := messages.NewS4U2ProxyReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey, sname, evidence, cl.Now())
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Proxy TGS_REQ")
+	}
+
+	_, rep, err := cl.TGSExchange(req, realm, tgt, skey, 0)
+	if err != nil {
+		return messages.Ticket{}, types.EncryptionKey{}, err
+	}
+
+	return rep.Ticket, rep.DecryptedEncPart.Key, nil
+}

@@ -5,7 +5,7 @@ What this fork (`github.com/go-krb5/krb5`, SorinS/krb5) adds to
 [BREAKING.md](BREAKING.md); how to run the tests is in
 [test/README.md](test/README.md).
 
-## Unreleased: branch `goose-parity`, second round (2026-11-04)
+## Unreleased: branch `dev1`, second round (2026-11-04)
 
 The rest of what the Goose krb5 has (FAST, SPAKE, PKINIT), then S4U, KDC
 proxy and the triage's leftovers. Pure Go; the curve arithmetic SPAKE needs
@@ -53,9 +53,26 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
 - **Anonymous PKINIT** (RFC 8062): `client.NewAnonymous` (MIT's `kinit -n`),
   the KDC's PA-PKINIT-KX checked; its TGT armors FAST (a password login
   armored by an anonymous TGT, tested against MIT).
+- **S4U** (MS-SFU): `Client.GetServiceTicketForUser` (S4U2Self: PA-FOR-USER
+  and PA-S4U-X509-USER, the KDC's echo checked) and
+  `Client.GetServiceTicketForProxy` (S4U2Proxy: constrained and
+  resource-based delegation), armored when the KDC does FAST. The tickets
+  stay out of the client's cache. Tested against the live AD (protocol
+  transition, Kerberos-only delegation, resource-based, a target not
+  allowed, a sensitive user; the target decrypts the ticket and reads
+  alice's PAC and the delegation info) and MIT 1.22 (S4U2Self, PA-FOR-USER
+  alone; its DB2 back end refuses S4U2Proxy). Not done: S4U2Self for a user
+  of another realm, and by certificate.
 - `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
 - `config.LibDefaults.Values`: the libdefaults relations without a field.
+
+### Security
+
+- `Ticket.Marshal` wrote a decrypted ticket's `DecryptedEncPart` (its session
+  key and PAC) after the ticket, in the clear, whenever the ticket was sent
+  on after being decrypted. Found by S4U2Proxy: AD gave an empty reply, MIT
+  ignored the extra field.
 
 ### Fixed
 

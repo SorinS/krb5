@@ -26,6 +26,14 @@ func (cl *Client) TGSREQGenerateAndExchange(spn types.PrincipalName, kdcRealm st
 // (a referral's, say) and the client's time now: user-to-user when tgsReq
 // is.
 func (cl *Client) newTGSReqLike(tgsReq messages.TGSReq, kdcRealm string, tgt messages.Ticket, sessionKey types.EncryptionKey) (messages.TGSReq, error) {
+	// S4U: the same request, signed again.
+	if tgsReq.S4UUser != nil || tgsReq.IsS4U2Proxy() {
+		tgsReq.ReqBody.Realm = kdcRealm
+		err := tgsReq.SetPAData(cl.Credentials.Domain(), tgt, sessionKey, cl.Now())
+
+		return tgsReq, err
+	}
+
 	if types.IsFlagSet(&tgsReq.ReqBody.KDCOptions, flags.EncTktInSkey) && len(tgsReq.ReqBody.AdditionalTickets) > 0 {
 		return messages.NewUser2UserTGSReqAt(cl.Credentials.CName(), kdcRealm, cl.Config, tgt, sessionKey, tgsReq.ReqBody.SName,
 			tgsReq.Renewal, tgsReq.ReqBody.AdditionalTickets[0], cl.Now())
@@ -120,6 +128,8 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		}
 
 		tgsRep.PAData = fr.PAData
+		tgsRep.CName = fr.Finished.CName
+		tgsRep.CRealm = fr.Finished.CRealm
 	}
 
 	err = tgsRep.DecryptEncPartUsage(replyKey, usage)
@@ -129,6 +139,10 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 
 	if ok, err := tgsRep.VerifyAt(cl.Config, tgsReq, cl.Now()); !ok {
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: TGS_REP is not valid")
+	}
+
+	if err := tgsRep.VerifyS4U(tgsReq); err != nil {
+		return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: S4U")
 	}
 
 	if tgsRep.Ticket.SName.NameString[0] == "krbtgt" && !tgsRep.Ticket.SName.Equal(tgsReq.ReqBody.SName) {
@@ -148,6 +162,12 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		}
 
 		return cl.TGSExchange(tgsReq, realm, tgsRep.Ticket, tgsRep.DecryptedEncPart.Key, referral)
+	}
+
+	// A ticket in a user's name is not the client's own: it does not go in
+	// the cache GetServiceTicket answers from.
+	if tgsReq.S4UUser != nil || tgsReq.IsS4U2Proxy() {
+		return tgsReq, tgsRep, nil
 	}
 
 	cl.cache.addEntry(

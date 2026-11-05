@@ -34,7 +34,12 @@ const (
 	KEY_USAGE_ENC_CHALLENGE_CLIENT = 54
 	KEY_USAGE_ENC_CHALLENGE_KDC    = 55
 	KEY_USAGE_AS_REQ               = 56
-	KEY_USAGE_SPAKE                = 65 // draft-ietf-kitten-krb-spake-preauth: the second factor.
+
+	// MS-SFU 2.2.2: PA-S4U-X509-USER's checksum, the request's and the reply's.
+	KEY_USAGE_PA_S4U_X509_USER_REQUEST = 26
+	KEY_USAGE_PA_S4U_X509_USER_REPLY   = 27
+
+	KEY_USAGE_SPAKE = 65 // draft-ietf-kitten-krb-spake-preauth: the second factor.
 	// 26-511.  Reserved for future use in Kerberos and related protocols.
 	// 512-1023.  Reserved for uses internal to a Kerberos implementation.
 	// 1024.  Encryption for application use in protocols that do not specify key usage values

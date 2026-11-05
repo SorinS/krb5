@@ -13,6 +13,8 @@ A.TEST, served by one krb5kdc on a free loopback port (UDP and TCP):
     alice     password "alice-pw", aes, sha2, rc4 and camellia keys
     bob       password "bob-pw", pre-authentication required
     HTTP/svc.a.test, host/svc.a.test   random keys, in DIR/svc.keytab
+    HTTP/proxy.a.test  random keys, in DIR/s4u.keytab, +ok_to_auth_as_delegate
+    HTTP/self.a.test   random keys, in DIR/s4u.keytab: without it (S4U)
     krbtgt/A.TEST   its keys exported to DIR/krbtgt.keytab, so that tests
                     can check the KDC's signatures in PACs
 
@@ -301,6 +303,9 @@ class Kdc:
         self.kadmin(a, "addprinc -randkey host/svc.a.test")
         self.kadmin(a, f"ktadd -k {self.path('svc.keytab')} HTTP/svc.a.test host/svc.a.test")
         self.kadmin(a, f"ktadd -k {self.path('krbtgt.keytab')} -norandkey krbtgt/{a}")
+        self.kadmin(a, "addprinc -randkey +ok_to_auth_as_delegate HTTP/proxy.a.test")
+        self.kadmin(a, "addprinc -randkey HTTP/self.a.test")
+        self.kadmin(a, f"ktadd -k {self.path('s4u.keytab')} HTTP/proxy.a.test HTTP/self.a.test")
         self.kadmin(k, "addprinc -pw kim-pw +requires_preauth kim")
         self.kadmin(k, "addprinc -randkey HTTP/svc.k.test")
         self.kadmin(k, f"ktadd -k {self.path('svc.keytab')} HTTP/svc.k.test")
