@@ -41,7 +41,7 @@ func readPAC(t *testing.T, tkt *messages.Ticket, account, password string) pac.P
 	return p
 }
 
-// S4U against a live AD (test/windows/s4u.ps1 set up the accounts).
+// S4U against a live AD (test/ad/s4u.ps1 set up the accounts).
 func TestClient_S4U_AD(t *testing.T) {
 	dir, password := test.ADLive(t)
 

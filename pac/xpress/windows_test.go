@@ -21,7 +21,7 @@ type vector struct {
 }
 
 // testdata/windows.txt.gz: what Windows' RtlCompressBuffer made of inputs
-// of many sizes and kinds (test/windows/xpress.ps1), both formats, both
+// of many sizes and kinds (test/ad/xpress.ps1), both formats, both
 // engines, the inputs' SHA-256 kept.
 func windowsVectors(t *testing.T) []vector {
 	t.Helper()

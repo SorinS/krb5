@@ -29,7 +29,7 @@ func TestAD_LDAP(t *testing.T) {
 
 	addr, host := os.Getenv("TEST_AD_LDAP"), os.Getenv("TEST_AD_DC_HOST")
 	if addr == "" || host == "" {
-		t.Skip("TEST_AD_LDAP or TEST_AD_DC_HOST is not set (see test/README.md)")
+		t.Skip("TEST_AD_LDAP or TEST_AD_DC_HOST is not set (see test/ad/README.md)")
 	}
 
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
