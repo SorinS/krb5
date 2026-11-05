@@ -117,8 +117,15 @@ func (t *Ticket) Unmarshal(b []byte) error {
 }
 
 // Marshal the Ticket.
+//
+// The decrypted part is left out: "optional" omits only a zero value, so a
+// ticket that had been decrypted would carry its session key and PAC in the
+// clear (S4U2Proxy sends on a ticket a service has decrypted).
 func (t *Ticket) Marshal() ([]byte, error) {
-	b, err := asn1.Marshal(*t, asn1.WithMarshalSlicePreserveTypes(true), asn1.WithMarshalSliceAllowStrings(true))
+	c := *t
+	c.DecryptedEncPart = EncTicketPart{}
+
+	b, err := asn1.Marshal(c, asn1.WithMarshalSlicePreserveTypes(true), asn1.WithMarshalSliceAllowStrings(true))
 	if err != nil {
 		return nil, err
 	}

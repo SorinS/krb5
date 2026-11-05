@@ -54,6 +54,9 @@ type TGSReq struct {
 	// as MIT and Windows do): the KDC's reply is encrypted in it (usage 9),
 	// and FAST's implicit armor is made from it.
 	SubKey types.EncryptionKey
+	// S4UUser is the user of an S4U2Self request: SetPAData adds its
+	// PA-FOR-USER and PA-S4U-X509-USER (see NewS4U2SelfReqAt).
+	S4UUser *S4UUser
 }
 
 type marshalKDCReqBody struct {
@@ -368,8 +371,28 @@ func (k *TGSReq) SetPAData(paRealm string, tgt Ticket, sessionKey types.Encrypti
 	}
 
 	for _, pa := range k.PAData {
-		if pa.PADataType != patype.PA_TGS_REQ {
+		switch pa.PADataType {
+		case patype.PA_TGS_REQ, patype.PA_FOR_USER, patype.PA_FOR_X509_USER:
+		default:
 			pas = append(pas, pa)
+		}
+	}
+
+	if k.S4UUser != nil {
+		pfu, err := k.S4UUser.paForUserData(sessionKey)
+		if err != nil {
+			return krberror.Errorf(err, krberror.ChksumError, "error making PA-FOR-USER")
+		}
+
+		pas = append(pas, pfu)
+
+		x509u, ok, err := k.S4UUser.paS4UData(k.SubKey, k.ReqBody.Nonce)
+		if err != nil {
+			return krberror.Errorf(err, krberror.ChksumError, "error making PA-S4U-X509-USER")
+		}
+
+		if ok {
+			pas = append(pas, x509u)
 		}
 	}
 

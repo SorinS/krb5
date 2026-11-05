@@ -435,7 +435,8 @@ func (k *TGSRep) Verify(cfg *config.Config, tgsReq TGSReq) (bool, error) {
 // VerifyAt checks the TGS_REP against its request, as Verify does, with now
 // the client's time (corrected by its offset from the KDC's).
 func (k *TGSRep) VerifyAt(cfg *config.Config, tgsReq TGSReq, now time.Time) (bool, error) {
-	if !k.CName.Equal(tgsReq.ReqBody.CName) {
+	// An S4U reply's client is the user (VerifyS4U), not the service asking.
+	if tgsReq.S4UUser == nil && !tgsReq.IsS4U2Proxy() && !k.CName.Equal(tgsReq.ReqBody.CName) {
 		return false, krberror.NewErrorf(krberror.KRBMsgError, "CName in response does not match what was requested. Requested: %+v; Reply: %+v", tgsReq.ReqBody.CName, k.CName)
 	}
 
