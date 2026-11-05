@@ -160,6 +160,11 @@ MIT's and Windows' tools are used as test oracles only.
   Directory salts a service account by its UPN or sAMAccountName, not its
   SPN) and a `uint32` key version (AD's can exceed the 8-bit field, written
   then in the format's 32-bit extension). `AddEntry` is unchanged.
+- keytab entries can be manipulated: the entry and principal types are
+  exported (`keytab.Entry`, `keytab.Principal`), with `Entry.SetKVNO`
+  (`uint32`; sets the 8-bit field and the 32-bit extension together) and
+  `Entry.SetTimestamp`. `Entry.KVNO` is the full version, `KVNO8` the
+  format's original byte.
 - Test substrate: `test/mitkdc/mitkdc.py` (two MIT realms on 127.0.0.1, one
   with its clock 900 s ahead), `test/ad/*.ps1` (an AD DC with claims),
   14 integration tests gated by `INTEGRATION=1` and `TEST_MIT_DIR` or
