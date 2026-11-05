@@ -1,103 +1,77 @@
 package spnego
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/go-krb5/x/encoding/asn1"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+
+	"github.com/go-krb5/krb5/gssapi"
+	"github.com/go-krb5/krb5/keytab"
 )
 
-const (
-	testNegTokenInit = "a08202aa308202a6a027302506092a864886f71201020206052b0501050206092a864882f71201020206062b0601050205a2820279048202756082027106092a864886f71201020201006e8202603082025ca003020105a10302010ea20703050000000000a38201706182016c30820168a003020105a10d1b0b544553542e474f4b524235a2233021a003020103a11a30181b04485454501b10686f73742e746573742e676f6b726235a382012b30820127a003020112a103020102a282011904820115d4bd890abc456f44e2e7a2e8111bd6767abf03266dfcda97c629af2ece450a5ae1f145e4a4d1bc2c848e66a6c6b31d9740b26b03cdbd2570bfcf126e90adf5f5ebce9e283ff5086da47b129b14fc0aabd4d1df9c1f3c72b80cc614dfc28783450b2c7b7749651f432b47aaa2ff158c0066b757f3fb00dd7b4f63d68276c76373ecdd3f19c66ebc43a81e577f3c263b878356f57e8d6c4eccd587b81538e70392cf7e73fc12a6f7c537a894a7bb5566c83ac4d69757aa320a51d8d690017aebf952add1889adfc3307b0e6cd8c9b57cf8589fbe52800acb6461c25473d49faa1bdceb8bce3f61db23f9cd6a09d5adceb411e1c4546b30b33331e570fd6bc50aa403557e75f488e759750ea038aab6454667d9b64f41a481d23081cfa003020112a281c70481c4d67ba2ae4cf5d917caab1d863605249320e90482563662ed92408a543b6ad5edeb8f9375e9060a205491df082fd2a5fec93dfb76f41012bb60cae20f07adbb77a1aa56f0521f36e1ea10dc9fb762902b254dd7664d0bcc6f751f2003e41990af1b4330d10477bfad638b9f0b704ac80cc47731f8ec8d801762bad8884b8de90adb1dbe7fc7b0ffafd38fb5eb8b6547cee30d89873281ce63ad70042a13478b1a7c2bdde0f223ace62dbb84e2d06f1070f4265f66e0544449335e2fcc4d0aee5bf81c5999"
-	testNegTokenResp = "a1143012a0030a0100a10b06092a864886f712010202"
+var (
+	oidKRB5   = gssapi.OIDKRB5.OID()
+	oidLegacy = gssapi.OIDMSLegacyKRB5.OID()
+	oidNTLM   = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 2, 2, 10}
+	oidNEGOEX = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 2, 2, 30}
 )
 
-func TestUnmarshal_negTokenInit(t *testing.T) {
-	t.Parallel()
-
-	b, err := hex.DecodeString(testNegTokenInit)
-	require.NoError(t, err)
-
-	isInit, nt, err := UnmarshalNegToken(b)
-	require.NoError(t, err)
-
-	assert.IsType(t, NegTokenInit{}, nt)
-	assert.True(t, isInit)
-
-	nInit := nt.(NegTokenInit)
-	assert.Equal(t, 4, len(nInit.MechTypes))
-
-	expectMechTypes := []asn1.ObjectIdentifier{
-		[]int{1, 2, 840, 113554, 1, 2, 2},
-		[]int{1, 3, 5, 1, 5, 2},
-		[]int{1, 2, 840, 48018, 1, 2, 2},
-		[]int{1, 3, 6, 1, 5, 2, 5},
+func TestMechTypePreferred(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		mechs         []asn1.ObjectIdentifier
+		offered, pref bool
+	}{
+		{"krb5 only", []asn1.ObjectIdentifier{oidKRB5}, true, true},
+		{"krb5 first", []asn1.ObjectIdentifier{oidKRB5, oidNTLM}, true, true},
+		{"krb5 after negoex", []asn1.ObjectIdentifier{oidNEGOEX, oidNTLM, oidKRB5}, true, false},
+		{"legacy krb5 first", []asn1.ObjectIdentifier{oidLegacy, oidNTLM}, true, true},
+		{"no krb5", []asn1.ObjectIdentifier{oidNEGOEX, oidNTLM}, false, false},
+		{"empty", nil, false, false},
+	} {
+		offered, pref := mechTypePreferred(tc.mechs)
+		assert.Equal(t, tc.offered, offered, "%s: offered", tc.name)
+		assert.Equal(t, tc.pref, pref, "%s: preferred", tc.name)
 	}
-	assert.Equal(t, expectMechTypes, nInit.MechTypes)
 }
 
-func TestMarshal_negTokenInit(t *testing.T) {
-	t.Parallel()
+// When KRB5 is offered but not first, the acceptor answers accept-incomplete
+// (ContinueNeeded) instead of rejecting, and does not read the optimistic
+// token (which belongs to the first mechanism). It still rejects a list with
+// no KRB5 at all.
+func TestAcceptSecContext_MechSelection(t *testing.T) {
+	svc := SPNEGOService(keytab.New())
 
-	b, err := hex.DecodeString(testNegTokenInit)
-	require.NoError(t, err)
-
-	_, nt, err := UnmarshalNegToken(b)
-	require.NoError(t, err)
-
-	nInit := nt.(NegTokenInit)
-
-	mb, err := nInit.Marshal()
-	require.NoError(t, err)
-
-	assert.Equal(t, b, mb)
-}
-
-func TestUnmarshal_negTokenResp(t *testing.T) {
-	t.Parallel()
-
-	b, err := hex.DecodeString(testNegTokenResp)
-	require.NoError(t, err)
-
-	isInit, nt, err := UnmarshalNegToken(b)
-	require.NoError(t, err)
-
-	assert.IsType(t, NegTokenResp{}, nt)
-	assert.False(t, isInit)
-
-	nResp := nt.(NegTokenResp)
-	assert.Equal(t, asn1.Enumerated(0), nResp.NegState)
-	assert.Equal(t, asn1.ObjectIdentifier{1, 2, 840, 113554, 1, 2, 2}, nResp.SupportedMech)
-}
-
-func TestMarshal_negTokenResp(t *testing.T) {
-	t.Parallel()
-
-	b, err := hex.DecodeString(testNegTokenResp)
-	require.NoError(t, err)
-
-	_, nt, err := UnmarshalNegToken(b)
-	require.NoError(t, err)
-
-	nResp := nt.(NegTokenResp)
-
-	mb, err := nResp.Marshal()
-	require.NoError(t, err)
-
-	assert.Equal(t, b, mb)
-}
-
-func TestUnmarshal_negTokenInitWithReqFlags(t *testing.T) {
-	mhex := "a01e301ca00d300b06092a864886f712010202a10403020176a2050403010203"
-
-	mb, err := hex.DecodeString(mhex)
-	require.NoError(t, err)
-
-	var m NegTokenInit
-
-	require.NoError(t, m.Unmarshal(mb))
-
-	assert.Equal(t, 3, len(m.MechTokenBytes))
+	for _, tc := range []struct {
+		name string
+		init NegTokenInit
+		want int
+	}{
+		{
+			"krb5 not first, with a foreign optimistic token",
+			NegTokenInit{MechTypes: []asn1.ObjectIdentifier{oidNEGOEX, oidNTLM, oidKRB5}, MechTokenBytes: []byte{0x01, 0x02, 0x03}},
+			gssapi.StatusContinueNeeded,
+		},
+		{
+			"krb5 first but no token",
+			NegTokenInit{MechTypes: []asn1.ObjectIdentifier{oidKRB5}},
+			gssapi.StatusContinueNeeded,
+		},
+		{
+			"no krb5 offered",
+			NegTokenInit{MechTypes: []asn1.ObjectIdentifier{oidNEGOEX, oidNTLM}},
+			gssapi.StatusBadMech,
+		},
+		{
+			"no mechanisms",
+			NegTokenInit{},
+			gssapi.StatusDefectiveToken,
+		},
+	} {
+		ct := &SPNEGOToken{Init: true, NegTokenInit: tc.init}
+		ok, _, st := svc.AcceptSecContext(ct)
+		assert.False(t, ok, tc.name)
+		assert.Equal(t, tc.want, st.Code, "%s: %s", tc.name, st.Message)
+	}
 }

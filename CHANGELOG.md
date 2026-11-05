@@ -97,6 +97,11 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   longer overwrites the request's `Host` header with the canonical name,
   which broke a virtual host behind a proxy (the canonical name is used for
   the SPN only).
+- SPNEGO acceptor: KRB5 need not be the first mechanism offered. Windows
+  lists NEGOEX or NTLM first; the acceptor now answers accept-incomplete
+  (so the client continues with KRB5) instead of rejecting the token, as
+  long as KRB5 is somewhere in the list. The optimistic token of a
+  non-preferred first mechanism is no longer misread as KRB5.
 - aes256-cts-hmac-sha384-192 keys are 32 bytes (were 24).
 - RC4: usage 9, usages of 128 and up, passwords outside the BMP (MIT's
   vectors).
@@ -206,7 +211,9 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
 
 ### Not done yet (being done in the second round, above)
 
-- SPNEGO with Kerberos not the first mechanism, and mechListMIC.
+- SPNEGO mechListMIC: produced and verified when the negotiation selects a
+  non-preferred mechanism (RFC 4178 section 5). Accepting KRB5 when it is
+  not the first mechanism offered is done (above).
 - kpasswd's set-password form for AD.
 - RC4 and DES3 GSS message tokens.
 
