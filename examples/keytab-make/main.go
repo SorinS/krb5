@@ -1,6 +1,7 @@
-// Command keytab-make writes a keytab from a principal's password, with the
-// salt MIT and AD's user accounts use by default (REALMname). The kvno must
-// be the account's for a service's keytab: service-ticket prints it.
+// Command keytab-make writes a keytab from a principal's password. The kvno
+// must be the account's for a service's keytab: service-ticket prints it (it
+// can be above 255 on AD). The default salt (REALMname) is the one MIT and AD
+// use for an account's own name; give -salt when it differs.
 //
 //	echo $PASSWORD | go run ./examples/keytab-make -principal svc-proxy -realm GOOSE.TEST -kvno 2 -out proxy.keytab
 package main
@@ -20,7 +21,8 @@ import (
 func main() {
 	principal := flag.String("principal", "", "the principal, without the realm")
 	realm := flag.String("realm", "", "the realm")
-	kvno := flag.Uint("kvno", 1, "the key's version")
+	kvno := flag.Uint("kvno", 1, "the key's version (may exceed 255 on AD)")
+	salt := flag.String("salt", "", "an explicit salt; empty for the principal's default")
 	out := flag.String("out", "", "the keytab file to write")
 	flag.Parse()
 
@@ -32,7 +34,7 @@ func main() {
 	kt := keytab.New()
 
 	for _, e := range []int32{etypeID.AES256_CTS_HMAC_SHA1_96, etypeID.AES128_CTS_HMAC_SHA1_96} {
-		if err := kt.AddEntry(*principal, *realm, strings.TrimSpace(password), time.Now(), uint8(*kvno), e); err != nil {
+		if err := kt.AddEntryWithSalt(*principal, *realm, strings.TrimSpace(password), *salt, time.Now(), uint32(*kvno), e); err != nil {
 			log.Fatal(err)
 		}
 	}

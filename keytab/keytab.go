@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/go-krb5/krb5/crypto"
+	"github.com/go-krb5/krb5/iana/patype"
 	"github.com/go-krb5/krb5/types"
 )
 
@@ -135,11 +136,35 @@ func (kt Keytab) String() string {
 	return s
 }
 
-// AddEntry adds an entry to the keytab. The password should be provided in plain text and it will be converted using the defined enctype to be stored.
+// AddEntry adds an entry to the keytab. The password should be provided in
+// plain text and it will be converted using the defined enctype to be stored.
+// The key is salted with the principal's default salt (REALM followed by the
+// name components, as MIT and AD form it for an account's own name); for an
+// account whose salt differs, or a key version above 255, use
+// AddEntryWithSalt.
 func (kt *Keytab) AddEntry(principalName, realm, password string, ts time.Time, kvno uint8, encType int32) error {
+	return kt.AddEntryWithSalt(principalName, realm, password, "", ts, uint32(kvno), encType)
+}
+
+// AddEntryWithSalt adds an entry whose key is derived from the password and an
+// explicit salt. An empty salt means the principal's default, as AddEntry
+// uses. Active Directory salts a user by its UPN or sAMAccountName rather than
+// the SPN, so a keytab for a service account made by this library needs that
+// account's salt here to match the key AD holds.
+//
+// kvno is a uint32: Active Directory key versions can exceed 255, which the
+// keytab's 8-bit field cannot hold. Such a version is written in the format's
+// 32-bit extension (readers that understand it, including this package, use
+// it), with the low byte in the 8-bit field as MIT does.
+func (kt *Keytab) AddEntryWithSalt(principalName, realm, password, salt string, ts time.Time, kvno uint32, encType int32) error {
 	princ, _ := types.ParseSPNString(principalName)
 
-	key, _, err := crypto.GetKeyFromPassword(password, princ, realm, encType, types.PADataSequence{})
+	var pas types.PADataSequence
+	if salt != "" {
+		pas = types.PADataSequence{{PADataType: patype.PA_PW_SALT, PADataValue: []byte(salt)}}
+	}
+
+	key, _, err := crypto.GetKeyFromPassword(password, princ, realm, encType, pas)
 	if err != nil {
 		return err
 	}
@@ -158,8 +183,8 @@ func (kt *Keytab) AddEntry(principalName, realm, password string, ts time.Time, 
 	e := newEntry()
 	e.Principal = ktep
 	e.Timestamp = ts
-	e.KVNO8 = kvno
-	e.KVNO = uint32(kvno)
+	e.KVNO8 = uint8(kvno)
+	e.KVNO = kvno
 	e.Key = key
 
 	kt.Entries = append(kt.Entries, e)
