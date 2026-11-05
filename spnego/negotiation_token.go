@@ -122,24 +122,35 @@ func (n *NegTokenInit) Unmarshal(b []byte) error {
 	return nil
 }
 
-// Verify an Init negotiation token.
-func (n *NegTokenInit) Verify() (bool, gssapi.Status) {
-	var mtSupported bool
-
-	for _, m := range n.MechTypes {
+// mechTypePreferred reports whether KRB5 is in the list, and whether it is the
+// first (most preferred) mechanism. When KRB5 is first, any optimistic
+// mechToken in the NegTokenInit is a KRB5 token; when it is offered but not
+// first, the optimistic token belongs to another mechanism (NEGOEX or NTLM,
+// which Windows often lists first) and must not be read as KRB5.
+func mechTypePreferred(mechTypes []asn1.ObjectIdentifier) (offered, first bool) {
+	for i, m := range mechTypes {
 		if m.Equal(gssapi.OIDKRB5.OID()) || m.Equal(gssapi.OIDMSLegacyKRB5.OID()) {
-			if n.mechToken == nil && n.MechTokenBytes == nil {
-				return false, gssapi.Status{Code: gssapi.StatusContinueNeeded}
-			}
-
-			mtSupported = true
-
-			break
+			return true, i == 0
 		}
 	}
 
-	if !mtSupported {
+	return false, false
+}
+
+// Verify an Init negotiation token.
+func (n *NegTokenInit) Verify() (bool, gssapi.Status) {
+	offered, first := mechTypePreferred(n.MechTypes)
+
+	if !offered {
 		return false, gssapi.Status{Code: gssapi.StatusBadMech, Message: "no supported mechanism specified in negotiation"}
+	}
+
+	// KRB5 is offered but not the preferred mechanism, or the client sent no
+	// optimistic token: answer accept-incomplete (ContinueNeeded) so the
+	// acceptor asks it to go on with KRB5 (RFC 4178 section 4.2.1). The
+	// optimistic token, if any, is for another mechanism, so it is not read.
+	if !first || (n.mechToken == nil && n.MechTokenBytes == nil) {
+		return false, gssapi.Status{Code: gssapi.StatusContinueNeeded}
 	}
 
 	mt := new(KRB5Token)

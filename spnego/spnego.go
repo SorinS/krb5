@@ -81,21 +81,26 @@ func (s *SPNEGO) AcceptSecContext(ct gssapi.ContextToken) (bool, context.Context
 
 	t.settings = s.serviceSettings
 
-	var oid asn1.ObjectIdentifier
 	if t.Init {
 		if len(t.NegTokenInit.MechTypes) == 0 {
 			return false, ctx, gssapi.Status{Code: gssapi.StatusDefectiveToken, Message: "SPNEGO NegTokenInit has no mechanism types"}
 		}
 
-		oid = t.NegTokenInit.MechTypes[0]
+		// KRB5 need not be the first mechanism offered: Windows lists NEGOEX
+		// or NTLM first. As long as it is somewhere in the list, Verify
+		// selects it (answering accept-incomplete when it is not preferred,
+		// so the client continues with KRB5). Only a list with no KRB5 at all
+		// is rejected here.
+		if offered, _ := mechTypePreferred(t.NegTokenInit.MechTypes); !offered {
+			return false, ctx, gssapi.Status{Code: gssapi.StatusBadMech, Message: "SPNEGO negotiation offers no KRB5 mechanism"}
+		}
 	}
 
 	if t.Resp {
-		oid = t.NegTokenResp.SupportedMech
-	}
-
-	if !oid.Equal(gssapi.OIDKRB5.OID()) && !oid.Equal(gssapi.OIDMSLegacyKRB5.OID()) {
-		return false, ctx, gssapi.Status{Code: gssapi.StatusDefectiveToken, Message: "SPNEGO OID of MechToken is not of type KRB5"}
+		oid := t.NegTokenResp.SupportedMech
+		if !oid.Equal(gssapi.OIDKRB5.OID()) && !oid.Equal(gssapi.OIDMSLegacyKRB5.OID()) {
+			return false, ctx, gssapi.Status{Code: gssapi.StatusDefectiveToken, Message: "SPNEGO OID of MechToken is not of type KRB5"}
+		}
 	}
 	// Flags in the NegInit must be used 	t.NegTokenInit.ReqFlags.
 	ok, status := t.Verify()
