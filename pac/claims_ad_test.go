@@ -15,7 +15,7 @@ import (
 	"github.com/go-krb5/krb5/test"
 )
 
-// A live AD's claims (test/windows/claims.ps1): carol's six string claims
+// A live AD's claims (test/ad/claims.ps1): carol's six string claims
 // make a ClaimsSet the KDC compresses (LZ77+Huffman); alice's one claim
 // (department) it does not.
 func TestPAC_Claims_AD(t *testing.T) {

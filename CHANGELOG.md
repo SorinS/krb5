@@ -65,6 +65,11 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   of another realm, and by certificate.
 - `test/mitkdc`: F.TEST (FAST only), S.TEST and O.TEST (SPAKE), P/Q/R/N.TEST
   (PKINIT, certificates from `test/mitkdc/pki.py` with OpenSSL).
+- `test/ad` (was `test/windows`): a bare Windows Server to a DC with every
+  account the `*_AD` tests use: a README with the walkthrough and which test
+  needs what, `provision.sh` to run the scripts over ssh, `verify.ps1` to check
+  the result. `docs`: the KDC setup, the first round's notes, the upstream
+  triage.
 - `config.LibDefaults.Values`: the libdefaults relations without a field.
 
 ### Security
@@ -134,7 +139,7 @@ MIT's and Windows' tools are used as test oracles only.
   family names (`aes`, `camellia`, `DEFAULT`, `-name`), case-insensitive
   enctypes, `dns_canonicalize_hostname = fallback`.
 - Test substrate: `test/mitkdc/mitkdc.py` (two MIT realms on 127.0.0.1, one
-  with its clock 900 s ahead), `test/windows/*.ps1` (an AD DC with claims),
+  with its clock 900 s ahead), `test/ad/*.ps1` (an AD DC with claims),
   14 integration tests gated by `INTEGRATION=1` and `TEST_MIT_DIR` or
   `TEST_AD_DIR`.
 
@@ -170,7 +175,7 @@ MIT's and Windows' tools are used as test oracles only.
 ### Upstream (jcmturner/gokrb5) taken
 
 PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
-526. The full triage is in `~/Dev/Goose/docs/Go_krb5_upstream_triage.md`.
+526. The full triage is in [docs/Go_krb5_upstream_triage.md](docs/Go_krb5_upstream_triage.md).
 
 ### Not done yet (being done in the second round, above)
 

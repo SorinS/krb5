@@ -62,7 +62,7 @@ func Capture() bool {
 
 // ADDirEnvVar names a directory with what the live AD tests need: a
 // krb5.conf for the domain GOOSE.TEST (its KDC reached on loopback, see
-// test/README.md), the service's keytab web.keytab (HTTP/web.goose.test),
+// test/ad/README.md), the service's keytab web.keytab (HTTP/web.goose.test),
 // and ADPasswordFileEnvVar a file with the test users' password.
 const (
 	ADDirEnvVar          = "TEST_AD_DIR"
@@ -79,7 +79,7 @@ func ADLive(t *testing.T) (string, string) {
 
 	dir, pwFile := os.Getenv(ADDirEnvVar), os.Getenv(ADPasswordFileEnvVar)
 	if dir == "" || pwFile == "" {
-		t.Skip("Skipping live AD test: " + ADDirEnvVar + " or " + ADPasswordFileEnvVar + " is not set (see test/README.md)")
+		t.Skip("Skipping live AD test: " + ADDirEnvVar + " or " + ADPasswordFileEnvVar + " is not set (see test/ad/README.md)")
 	}
 
 	b, err := os.ReadFile(pwFile)
