@@ -26,7 +26,7 @@ import (
 )
 
 // testdata/kdc.txt: a CA, KDC certificates and their keys made by OpenSSL
-// (test/mitkdc/pki.py, through gslib.git's krb5/scripts/pkinit_vectors.py):
+// (test/mitkdc/pki.py):
 // "now UNIX" (a time inside their validity), "cert NAME HEX" (DER) and
 // "key NAME HEX" (PKCS #8) for ca, kdc, kdc-dns, kdc-noeku and rogue.
 type vectors struct {

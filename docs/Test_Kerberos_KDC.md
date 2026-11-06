@@ -1,7 +1,6 @@
 # Kerberos test KDCs: MIT on loopback, and an Active Directory DC
 
-How the Kerberos tests of `gslib.git/krb5` (Goose) and
-this repository (Go) get their KDCs. Both sets of scripts do
+How this repository's Kerberos tests get their KDCs. The scripts do
 everything below; this page is what they do, and how to do it by hand.
 
 **Rule for every host:** nothing listens on a public address. The MIT
@@ -12,14 +11,13 @@ through ssh tunnels to its loopback.
 
 ### The scripted way
 
-| Repo | Script | Realms |
-|---|---|---|
-| Go | `test/mitkdc/mitkdc.py [--dir DIR] [--mit PREFIX]` | A.TEST (alice, bob, HTTP/ and host/svc.a.test, S4U services, krbtgt keys exported), K.TEST (KDC clock +900 s), F.TEST (FAST only), S.TEST/O.TEST (SPAKE), P/Q/R/N.TEST (PKINIT) |
-| Goose | `krb5/scripts/kdc.py [--dir DIR]` | A.TEST/B.TEST (trust), F.TEST (FAST only), S.TEST/O.TEST (SPAKE), P/Q/R/N.TEST (PKINIT) |
+| Script | Realms |
+|---|---|
+| `test/mitkdc/mitkdc.py [--dir DIR] [--mit PREFIX]` | A.TEST (alice, bob, HTTP/ and host/svc.a.test, S4U services, krbtgt keys exported), K.TEST (KDC clock +900 s), F.TEST (FAST only), S.TEST/O.TEST (SPAKE), P/Q/R/N.TEST (PKINIT) |
 
-Both write `DIR/krb5.conf` and keytabs, start `krb5kdc -n` per realm
-group on free loopback ports, and stop on Ctrl-C. The Go one also writes
-`DIR/env` (`KRB5_CONFIG`, `TEST_MIT_DIR`, `TEST_MIT_BIN`, ports):
+It writes `DIR/krb5.conf` and keytabs, starts `krb5kdc -n` per realm
+group on free loopback ports, stops on Ctrl-C, and writes `DIR/env`
+(`KRB5_CONFIG`, `TEST_MIT_DIR`, `TEST_MIT_BIN`, ports):
 
     python3 test/mitkdc/mitkdc.py --dir /tmp/mitkdc &
     set -a; . /tmp/mitkdc/env; set +a
@@ -104,7 +102,7 @@ Variations the suites use:
 - **SPAKE:** `[libdefaults] spake_preauth_groups = edwards25519 P-256 ...`
   in the KDC's profile, `+requires_preauth` principals.
 - **PKINIT:** `pkinit_identity`, `pkinit_anchors` per realm; certificates
-  from `krb5/scripts/pki.py`.
+  from `test/mitkdc/pki.py`.
 - **Cross-realm:** the same `krbtgt/B.TEST@A.TEST` and
   `krbtgt/A.TEST@B.TEST` (same password, same enctypes) in both databases.
 - **gss-server** binds `0.0.0.0` on its own: run it as
@@ -120,10 +118,10 @@ they make (logs, the keytab) and password files they read once and delete.
 Passwords are never typed on a command line or printed: copy them in as
 files (`scp`), the script reads and deletes them.
 
-Scripts: `gslib.git/krb5/scripts/windows` (Goose; also `trust.ps1`) and
-[`test/ad`](../test/ad/README.md) (the same, plus `claims.ps1`,
-`s4u.ps1`, `xpress.ps1`, `verify.ps1`, `provision.sh`; its README is the
-full walkthrough for Go).
+Scripts: [`test/ad`](../test/ad/README.md) (`state.ps1`, `firewall.ps1`,
+`schedule.ps1`, `promote.ps1`, `setup.ps1`, `claims.ps1`, `s4u.ps1`,
+`xpress.ps1`, `verify.ps1`, `provision.sh`); its README is the full
+walkthrough.
 
 ### Steps
 
@@ -157,9 +155,9 @@ full walkthrough for Go).
 6. **`s4u.ps1`** (Go; the same password file): service accounts with
    delegation policy, a sensitive user and a user mapped to a certificate,
    for S4U2Self and S4U2Proxy.
-7. **`trust.ps1`** (Goose; password in `C:\Goose\dc\trust.txt`): a
-   two-way realm trust with MIT's A.TEST (`netdom trust /realm /twoway`,
-   `ksetup` AES), the account mit-alice mapped to alice@A.TEST.
+7. **A two-way realm trust** with MIT's A.TEST (`netdom trust /realm
+   /twoway`, `ksetup` AES; the password read from a file as above), the
+   account mit-alice mapped to alice@A.TEST.
 8. **`xpress.ps1`** (Go, no password): vectors from ntdll's
    `RtlCompressBuffer`/`RtlDecompressBufferEx` for the claims
    decompressor.
@@ -175,9 +173,7 @@ ssh forwards TCP only: the client's krb5.conf has
 name (`<dc-host>.goose.test`) is its LDAP service's name
 (`ldap/<dc-host>.goose.test`).
 
-Goose: `python3 krb5/scripts/ad.py --password-file ... --keytab web.keytab
---dc-host <dc-host>.goose.test [--trust-password-file ...]`.
-Go: see `test/ad/README.md` (`TEST_AD_DIR`, `TEST_AD_PASSWORD_FILE`,
+See `test/ad/README.md` (`TEST_AD_DIR`, `TEST_AD_PASSWORD_FILE`,
 `TEST_AD_LDAP`, `TEST_AD_DC_HOST`).
 
 ### What AD does that MIT does not (found with these tests)

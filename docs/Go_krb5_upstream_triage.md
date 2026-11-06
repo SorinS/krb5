@@ -2,7 +2,7 @@
 
 Date: 2026-11-03.
 Upstream: https://github.com/jcmturner/gokrb5. The list covers 31 open PRs, about 100 open issues, and the closed-unmerged PRs among the last 100 closed. The data came from the unauthenticated REST API and the PR `.diff` files.
-Fork: this repository at committed HEAD `7e3cb81` (branch `goose-parity`). The working tree has an uncommitted `pac/pac_type.go` edit, which does not build: `zeroSignature` is undefined. I did not touch it. Every probe ran against a `git archive HEAD` copy in `scratchpad/forkcopy/` with an extra `probe/` package, so nothing in the fork was modified.
+Fork: this repository at committed HEAD `7e3cb81`. The working tree has an uncommitted `pac/pac_type.go` edit, which does not build: `zeroSignature` is undefined. I did not touch it. Every probe ran against a `git archive HEAD` copy in `scratchpad/forkcopy/` with an extra `probe/` package, so nothing in the fork was modified.
 
 ## How to read "status"
 - **present**: the fork already has the fix or feature. Evidence is given as file:line or a commit.

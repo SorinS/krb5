@@ -7,9 +7,10 @@ What this fork (`github.com/go-krb5/krb5`, SorinS/krb5) adds to
 
 ## Unreleased: branch `dev1`, second round (2026-11-04)
 
-The rest of what the Goose krb5 has (FAST, SPAKE, PKINIT), then S4U, KDC
-proxy and the triage's leftovers. Pure Go; the curve arithmetic SPAKE needs
-comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
+FAST, SPAKE and PKINIT pre-authentication, then S4U, and the leftovers from
+the upstream (jcmturner/gokrb5) triage. Pure Go; the curve arithmetic SPAKE
+needs comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no
+cgo).
 
 ### Added
 
@@ -136,7 +137,7 @@ comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no cgo).
   and `default_tgs_enctypes` did not default to `permitted_enctypes` as in
   MIT: a user with SHA-2 keys only could not log in by default.
 
-## Unreleased: branch `goose-parity` (2026-11-03)
+## Unreleased: first round (2026-11-03)
 
 Branched from `camellia128-cts-cmac` (7e3cb81). Pure Go throughout: no cgo,
 MIT's and Windows' tools are used as test oracles only.

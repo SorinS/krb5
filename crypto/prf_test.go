@@ -13,7 +13,7 @@ import (
 
 // testdata/mit_crypto.txt is MIT's libk5crypto's output (krb5_c_prf,
 // krb5_c_fx_cf2_simple, ...) on random keys and inputs, for every
-// encryption type; made by gslib.git's krb5/scripts/mit_crypto.py.
+// encryption type.
 func TestMITCrypto(t *testing.T) {
 	t.Parallel()
 

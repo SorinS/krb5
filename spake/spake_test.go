@@ -19,8 +19,7 @@ import (
 )
 
 // testdata/vectors.txt is Appendix C of draft-ietf-kitten-krb-spake-preauth
-// (made by gslib.git's krb5/scripts/spake_vectors.py from the draft's
-// text), one vector per line:
+// (from the draft's text), one vector per line:
 // name|etype|group|key|w|w_reduced|x|y|X|Y|T|S|K|support|optimistic|challenge|thash1|thash2|body|K0|K1|K2|K3.
 func TestVectors(t *testing.T) {
 	t.Parallel()

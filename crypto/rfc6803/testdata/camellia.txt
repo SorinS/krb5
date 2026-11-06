@@ -1,5 +1,5 @@
 # Camellia (RFC 3713) block and F-function vectors, every block one checked against openssl enc -camellia-N-ecb
-# (from the Goose bignum library's scripts/camellia_vectors.py; 192-bit keys left out, this package has none).
+# (192-bit keys left out, this package has none).
 # block KEY PLAINTEXT CIPHERTEXT | f X SUBKEY F(X, SUBKEY)
 block 0123456789abcdeffedcba9876543210 0123456789abcdeffedcba9876543210 67673138549669730857065648eabe43
 block 0123456789abcdeffedcba987654321000112233445566778899aabbccddeeff 0123456789abcdeffedcba9876543210 9acc237dff16d76c20ef7c919e3a7509
