@@ -311,6 +311,10 @@ func (cl *Client) Key(etype etype.EType, kvno int, krberr *messages.KRBError) (t
 
 // IsConfigured indicates if the client has the values required set.
 func (cl *Client) IsConfigured() (bool, error) {
+	if cl.Config == nil {
+		return false, errors.New("client has no krb5 configuration")
+	}
+
 	if cl.Credentials.UserName() == "" {
 		return false, errors.New("client does not have a username")
 	}
