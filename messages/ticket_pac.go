@@ -172,6 +172,10 @@ func replaceADData(entry asn1.RawValue, ifRelevant []byte, index int, data []byt
 		return entry, err
 	}
 
+	if index < 0 || index >= len(inner) {
+		return entry, fmt.Errorf("PAC element index %d is out of range (%d elements)", index, len(inner))
+	}
+
 	elemFields, err := derElements(inner[index].Bytes)
 	if err != nil {
 		return entry, err

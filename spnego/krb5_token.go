@@ -150,7 +150,9 @@ func (m *KRB5Token) Verify() (bool, gssapi.Status) {
 			return false, gssapi.Status{Code: gssapi.StatusDefectiveToken, Message: "KRB5_Error token not valid"}
 		}
 
-		return true, gssapi.Status{Code: gssapi.StatusUnavailable}
+		// A KRB-ERROR is not a verified context: report not-authenticated so no
+		// caller receives ok=true with a nil context to dereference.
+		return false, gssapi.Status{Code: gssapi.StatusUnavailable, Message: "KRB5 token is a KRB-ERROR from the peer"}
 	}
 
 	return false, gssapi.Status{Code: gssapi.StatusDefectiveToken, Message: "unknown TOK_ID in KRB5 token"}

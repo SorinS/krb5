@@ -53,6 +53,12 @@ func GetLengthFromASN(b []byte) int {
 
 // GetNumberBytesInLengthHeader returns the number of bytes in the ASn1 header that indicate the length.
 func GetNumberBytesInLengthHeader(b []byte) int {
+	// A tag byte and a length byte are the minimum; without them there are no
+	// length bytes to count (and b[1] must not be read).
+	if len(b) < 2 {
+		return 0
+	}
+
 	if int(b[1]) <= 127 {
 		return 1
 	}

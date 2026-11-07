@@ -61,6 +61,10 @@ func (cl *Client) Armor() (messages.Armor, error) {
 // ArmorFromCCache is the cache's TGT for the realm as an armor (MIT's
 // kinit -T cache).
 func ArmorFromCCache(c *credentials.CCache, realm string) (messages.Armor, error) {
+	if c == nil {
+		return messages.Armor{}, fmt.Errorf("no credential cache provided")
+	}
+
 	tgtName := types.PrincipalName{NameType: nametype.KRB_NT_SRV_INST, NameString: []string{"krbtgt", realm}}
 
 	cred, ok := c.GetEntry(tgtName)

@@ -152,6 +152,11 @@ func unmarshalTicketsSequence(in asn1.RawValue) ([]Ticket, error) {
 	// This is a workaround to a asn1 decoding issue in golang - https://github.com/golang/go/issues/17321. It's not pretty I'm afraid
 	// We pull out raw values from the larger raw value (that is actually the data of the sequence of raw values) and track our position moving along the data.
 	b := in.Bytes
+	// A tag byte and at least one length byte are needed to read the header; a
+	// shorter (malformed) value holds no tickets.
+	if len(b) < 2 {
+		return nil, nil
+	}
 	// Ignore the head of the asn1 stream (1 byte for tag and those for the length) as this is what tells us its a sequence but we're handling it ourselves.
 	p := 1 + asn1tools.GetNumberBytesInLengthHeader(in.Bytes)
 
@@ -262,7 +267,9 @@ func (t *Ticket) GetPACType(keytab *keytab.Keytab, sname *types.PrincipalName, l
 
 			err := ad2.Unmarshal(ad.ADData)
 			if err != nil {
-				l.Printf("PAC authorization data could not be unmarshaled: %v", err)
+				if l != nil {
+					l.Printf("PAC authorization data could not be unmarshaled: %v", err)
+				}
 				continue
 			}
 

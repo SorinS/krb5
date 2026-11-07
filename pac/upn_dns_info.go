@@ -2,6 +2,7 @@ package pac
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/go-krb5/x/rpc/mstypes"
 )
@@ -51,8 +52,17 @@ func (k *UPNDNSInfo) Unmarshal(b []byte) (err error) {
 		return err
 	}
 
-	ub := mstypes.NewReader(bytes.NewReader(b[k.UPNOffset : k.UPNOffset+k.UPNLength]))
-	db := mstypes.NewReader(bytes.NewReader(b[k.DNSDomainNameOffset : k.DNSDomainNameOffset+k.DNSDomainNameLength]))
+	// The offsets and lengths come from the PAC buffer; compute each window in
+	// int (not wrapping uint16) and bounds-check it against b before slicing.
+	upnStart, upnEnd := int(k.UPNOffset), int(k.UPNOffset)+int(k.UPNLength)
+	dnsStart, dnsEnd := int(k.DNSDomainNameOffset), int(k.DNSDomainNameOffset)+int(k.DNSDomainNameLength)
+
+	if upnEnd > len(b) || dnsEnd > len(b) {
+		return fmt.Errorf("UPN_DNS_INFO field extends past its %d-byte buffer", len(b))
+	}
+
+	ub := mstypes.NewReader(bytes.NewReader(b[upnStart:upnEnd]))
+	db := mstypes.NewReader(bytes.NewReader(b[dnsStart:dnsEnd]))
 
 	u := make([]rune, k.UPNLength/2)
 	for i := 0; i < len(u); i++ {

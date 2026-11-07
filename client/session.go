@@ -95,8 +95,8 @@ type jsonSession struct {
 // AddSession adds a session for a realm with a TGT to the client's session cache.
 // A goroutine is started to automatically renew the TGT before expiry.
 func (cl *Client) addSession(tgt messages.Ticket, dep messages.EncKDCRepPart) {
-	if strings.ToLower(tgt.SName.NameString[0]) != "krbtgt" {
-		// Not a TGT.
+	if len(tgt.SName.NameString) == 0 || strings.ToLower(tgt.SName.NameString[0]) != "krbtgt" {
+		// Not a TGT (or a malformed ticket with no service name).
 		return
 	}
 
@@ -338,7 +338,12 @@ func (cl *Client) sessionTimes(realm string) (authTime, endTime, renewTime, sess
 	return authTime, endTime, renewTime, sessionExp, nil
 }
 
-// spnRealm resolves the realm name of a service principal name.
+// spnRealm resolves the realm name of a service principal name. It returns ""
+// when there is no configuration to resolve against or the name is empty.
 func (cl *Client) spnRealm(spn types.PrincipalName) string {
+	if cl.Config == nil || len(spn.NameString) == 0 {
+		return ""
+	}
+
 	return cl.Config.ResolveRealm(spn.NameString[len(spn.NameString)-1])
 }

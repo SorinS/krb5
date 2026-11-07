@@ -31,3 +31,11 @@ func Test_nfold(t *testing.T) {
 		assert.Equal(t, test.folded, hex.EncodeToString(Nfold(test.b, test.n)))
 	}
 }
+
+// Nfold of empty input must not divide by zero (reachable from a string-to-key
+// with an empty password and salt).
+func TestNfold_Empty(t *testing.T) {
+	assert.NotPanics(t, func() {
+		assert.Equal(t, make([]byte, 8), Nfold([]byte{}, 64))
+	})
+}

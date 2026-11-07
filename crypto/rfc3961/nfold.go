@@ -20,6 +20,12 @@ License: http://www.apache.org/licenses/LICENSE-2.0
 func Nfold(m []byte, n int) []byte {
 	k := len(m) * 8
 
+	// With no input there is nothing to fold; return n zero bits rather than
+	// dividing by k == 0 below.
+	if k == 0 {
+		return make([]byte, n/8)
+	}
+
 	// Get the lowest common multiple of the two bit sizes.
 	lcm := lcm(n, k)
 	relicate := lcm / k

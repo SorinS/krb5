@@ -92,6 +92,13 @@ func (m *Request) Marshal() (b []byte, err error) {
 
 // Unmarshal a byte slice into a Reply.
 func (m *Reply) Unmarshal(b []byte) error {
+	// The 6-byte header (message length, version, AP-REP length) comes straight
+	// off the wire (kpasswd/UDP), so every field and slice is bounds-checked
+	// before use; a short or inconsistent reply is an error, not a panic.
+	if len(b) < 6 {
+		return fmt.Errorf("kadmin reply is %d bytes, too short for its header", len(b))
+	}
+
 	m.MessageLength = int(binary.BigEndian.Uint16(b[0:2]))
 
 	m.Version = int(binary.BigEndian.Uint16(b[2:4]))
@@ -99,8 +106,16 @@ func (m *Reply) Unmarshal(b []byte) error {
 		return fmt.Errorf("kadmin reply has incorrect protocol version number: %d", m.Version)
 	}
 
+	if m.MessageLength < 6 || m.MessageLength > len(b) {
+		return fmt.Errorf("kadmin reply message length %d is outside the %d-byte buffer", m.MessageLength, len(b))
+	}
+
 	m.APREPLength = int(binary.BigEndian.Uint16(b[4:6]))
 	if m.APREPLength != 0 {
+		if 6+m.APREPLength > m.MessageLength {
+			return fmt.Errorf("kadmin reply AP-REP length %d is outside the message", m.APREPLength)
+		}
+
 		err := m.APREP.Unmarshal(b[6 : 6+m.APREPLength])
 		if err != nil {
 			return err
@@ -123,6 +138,10 @@ func (m *Reply) Unmarshal(b []byte) error {
 }
 
 func parseResponse(b []byte) (c uint16, s string) {
+	if len(b) < 2 {
+		return 0, ""
+	}
+
 	c = binary.BigEndian.Uint16(b[0:2])
 
 	buf := bytes.NewBuffer(b[2:])

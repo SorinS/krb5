@@ -145,7 +145,7 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: S4U")
 	}
 
-	if tgsRep.Ticket.SName.NameString[0] == "krbtgt" && !tgsRep.Ticket.SName.Equal(tgsReq.ReqBody.SName) {
+	if len(tgsRep.Ticket.SName.NameString) > 0 && tgsRep.Ticket.SName.NameString[0] == "krbtgt" && !tgsRep.Ticket.SName.Equal(tgsReq.ReqBody.SName) {
 		if referral > 5 {
 			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: maximum number of referrals exceeded")
 		}
@@ -241,6 +241,10 @@ func (cl *Client) GetServiceTicket(spn string) (messages.Ticket, types.Encryptio
 		tkt  messages.Ticket
 		skey types.EncryptionKey
 	)
+
+	if cl.Config == nil {
+		return tkt, skey, krberror.New(krberror.ConfigError, "client has no krb5 configuration")
+	}
 
 	if tkt, skey, ok := cl.GetCachedTicket(spn); ok {
 		// Already a valid ticket in the cache.

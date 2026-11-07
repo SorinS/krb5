@@ -121,6 +121,10 @@ func NewWithKeytab(username, realm string, kt *keytab.Keytab, krb5conf *config.C
 //
 // WARNING: A client created from CCache does not automatically renew TGTs and a failure will occur after the TGT expires.
 func NewFromCCache(c *credentials.CCache, krb5conf *config.Config, settings ...func(*Settings)) (*Client, error) {
+	if c == nil {
+		return nil, errors.New("no credential cache provided")
+	}
+
 	cl := &Client{
 		Credentials: c.GetClientCredentials(),
 		Config:      krb5conf,
@@ -288,6 +292,10 @@ func (cl *Client) Key(etype etype.EType, kvno int, krberr *messages.KRBError) (t
 	if cl.Credentials.HasKeytab() && etype != nil {
 		return cl.Credentials.Keytab().GetEncryptionKey(cl.Credentials.CName(), cl.Credentials.Domain(), kvno, etype.GetETypeID())
 	} else if cl.Credentials.HasPassword() {
+		if etype == nil {
+			return types.EncryptionKey{}, 0, errors.New("no encryption type given to derive a key from the password")
+		}
+
 		if krberr != nil && krberr.ErrorCode == errorcode.KDC_ERR_PREAUTH_REQUIRED {
 			var pas types.PADataSequence
 
@@ -441,6 +449,10 @@ func (cl *Client) Destroy() {
 // Diagnostics runs a set of checks that the client is properly configured and writes details to the io.Writer provided.
 func (cl *Client) Diagnostics(w io.Writer) error {
 	cl.Print(w)
+
+	if cl.Config == nil {
+		return errors.New("client has no krb5 configuration")
+	}
 
 	var errs []string
 

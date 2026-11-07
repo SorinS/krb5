@@ -78,6 +78,13 @@ func (pac *PACType) Unmarshal(b []byte) (err error) {
 		return err
 	}
 
+	// CBuffers is attacker-controlled; each InfoBuffer needs 16 more bytes (two
+	// uint32 and a uint64), so a count that cannot fit in the remaining data is
+	// rejected before allocating, rather than making a huge slice (OOM).
+	if uint64(pac.CBuffers) > uint64(len(b)-8)/16 {
+		return fmt.Errorf("PAC claims %d info buffers, more than its %d bytes can hold", pac.CBuffers, len(b))
+	}
+
 	buf := make([]InfoBuffer, pac.CBuffers)
 	for i := range buf {
 		buf[i].ULType, err = r.Uint32()

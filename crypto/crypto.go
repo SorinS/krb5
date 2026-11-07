@@ -116,6 +116,10 @@ func GetKeyFromPassword(passwd string, cname types.PrincipalName, realm string, 
 				return key, et, fmt.Errorf("error unmashaling PA Data to PA-ETYPE-INFO2: %w", err)
 			}
 
+			if len(eti) == 0 {
+				return key, et, fmt.Errorf("PA-ETYPE-INFO from the KDC has no entries")
+			}
+
 			if etypeID != eti[0].EType {
 				et, err = GetEtype(eti[0].EType)
 				if err != nil {
@@ -134,6 +138,10 @@ func GetKeyFromPassword(passwd string, cname types.PrincipalName, realm string, 
 			err := et2.Unmarshal(pa.PADataValue)
 			if err != nil {
 				return key, et, fmt.Errorf("error unmashalling PA Data to PA-ETYPE-INFO2: %w", err)
+			}
+
+			if len(et2) == 0 {
+				return key, et, fmt.Errorf("PA-ETYPE-INFO2 from the KDC has no entries")
 			}
 
 			if etypeID != et2[0].EType {

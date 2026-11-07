@@ -55,9 +55,19 @@ func UnsetFlag(f *asn1.BitString, i int) {
 	f.Bytes[b] = f.Bytes[b] &^ (1 << p)
 }
 
-// IsFlagSet tests if a flag is set in the ASN1 BitString.
+// IsFlagSet tests if a flag is set in the ASN1 BitString. A flag beyond the
+// BitString's length is not set (a short or empty BitString, as a malformed
+// message may carry, must not panic).
 func IsFlagSet(f *asn1.BitString, i int) bool {
+	if f == nil || i < 0 {
+		return false
+	}
+
 	b := i / 8
+	if b >= len(f.Bytes) {
+		return false
+	}
+
 	p := uint(7 - (i - 8*b))
 
 	return f.Bytes[b]&(1<<p) != 0

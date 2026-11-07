@@ -169,7 +169,7 @@ func readMessage(r *bufio.Reader) (tlv, error) {
 	}
 
 	_, _, n := lengthOf(h)
-	if n > maxMessage {
+	if n < 0 || n > maxMessage {
 		return tlv{}, fmt.Errorf("ldap: a message of %d bytes", n)
 	}
 

@@ -70,6 +70,10 @@ func (cl *Client) SetPasswd(targName types.PrincipalName, targRealm, newPasswd s
 // kpasswd request is authenticated with, by an AS exchange of its own (the
 // password being changed may be expired, so an ordinary TGT may not be held).
 func (cl *Client) chgPasswdTicket() (messages.Ticket, types.EncryptionKey, error) {
+	if cl.Config == nil {
+		return messages.Ticket{}, types.EncryptionKey{}, fmt.Errorf("client has no krb5 configuration")
+	}
+
 	ASReq, err := messages.NewASReqForChgPasswdAt(cl.Credentials.Domain(), cl.Config, cl.Credentials.CName(), cl.Now())
 	if err != nil {
 		return messages.Ticket{}, types.EncryptionKey{}, err

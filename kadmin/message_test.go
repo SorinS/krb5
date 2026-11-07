@@ -34,3 +34,25 @@ func TestUnmarshalReply(t *testing.T) {
 }
 
 // Request marshal is tested via integration test in the client package due to the dynamic keys and encryption.
+
+// Malformed kpasswd replies (short header, or length fields pointing past the
+// buffer) must be rejected as errors, never panic — the bytes come from the
+// network over UDP and are spoofable.
+func TestReply_Unmarshal_Malformed(t *testing.T) {
+	cases := map[string][]byte{
+		"empty":                 {},
+		"short header":          {0x00, 0x05, 0x00},
+		"bad version":           {0x00, 0x06, 0x00, 0x02, 0x00, 0x00},
+		"msglen past buffer":    {0xFF, 0xFF, 0x00, 0x01, 0x00, 0x00},
+		"msglen below header":   {0x00, 0x02, 0x00, 0x01, 0x00, 0x00},
+		"aprep len past msglen": {0x00, 0x08, 0x00, 0x01, 0x00, 0xFF},
+	}
+
+	for name, b := range cases {
+		b := b
+		t.Run(name, func(t *testing.T) {
+			var r Reply
+			assert.NotPanics(t, func() { _ = r.Unmarshal(b) })
+		})
+	}
+}
