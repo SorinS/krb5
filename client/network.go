@@ -14,6 +14,11 @@ import (
 
 // SendToKDC performs network actions to send data to the KDC.
 func (cl *Client) sendToKDC(b []byte, realm string) (rb []byte, err error) {
+	// MS-KKDCP: a realm whose KDCs are https:// URLs is reached over HTTPS.
+	if cl.usesKDCProxy(realm) {
+		return cl.sendKDCProxy(realm, b)
+	}
+
 	if cl.Config.LibDefaults.UDPPreferenceLimit == 1 {
 		if rb, err = cl.sendKDCTCP(realm, b); err != nil {
 			if e, ok := err.(messages.KRBError); ok {

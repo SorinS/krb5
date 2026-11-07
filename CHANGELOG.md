@@ -7,8 +7,8 @@ What this fork (`github.com/go-krb5/krb5`, SorinS/krb5) adds to
 
 ## Unreleased: branch `dev1`, second round (2026-11-04)
 
-FAST, SPAKE and PKINIT pre-authentication, then S4U, and the leftovers from
-the upstream (jcmturner/gokrb5) triage. Pure Go; the curve arithmetic SPAKE
+FAST, SPAKE and PKINIT pre-authentication, then S4U, KKDCP, and the leftovers
+from the upstream (jcmturner/gokrb5) triage. Pure Go; the curve arithmetic SPAKE
 needs comes from filippo.io/edwards25519 and filippo.io/nistec (pure Go, no
 cgo).
 
@@ -116,6 +116,14 @@ cgo).
   offer uses no mechListMIC, as MIT does; the Windows NEGOEX-first path (where
   the initiator continues with Kerberos in a later leg) is not yet driven to
   completion and is unverified against Windows.
+- **KKDCP** (MS-KKDCP, Kerberos over HTTPS): a KDC written in krb5.conf as an
+  `https://` URL (`kdc = https://proxy.example.com/KdcProxy`) is a KDC proxy —
+  the AS and TGS requests are wrapped in a KDC-PROXY-MESSAGE and POSTed over
+  HTTPS, with the realm's `http_anchors` as the trusted roots (the system
+  roots with none). Tested against MIT's A.TEST through a local HTTPS proxy
+  that relays to the real KDC: an AS and a TGS exchange end to end, the wire
+  format cross-checked by an independent decoder, and an untrusted proxy
+  certificate refused. kpasswd over the proxy is not done.
 - `Client.ChangePasswd` now uses the kpasswd change-password form (version 1,
   no target principal), which a KDC accepts from the user itself; it sent the
   set-password (reset) form before, which Active Directory refused without
@@ -236,7 +244,7 @@ PRs 440, 448, 492, 505, 515, 580, 582, CL 523; issues 436, 444/445, 519,
   accept-incomplete when KRB5 is not the first mechanism (done, above), but
   the Kerberos continuation in the following leg, and the behaviour of a
   Windows NEGOEX client, are not yet exercised.
-- RC4 and DES3 GSS message tokens.
+- RC4 and DES3 GSS message tokens (deprecated; not planned).
 
 ### Open decisions
 
