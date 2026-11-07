@@ -10,7 +10,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -28,24 +27,28 @@ func main() {
 
 	cfg, err := config.Load(os.Getenv("KRB5_CONFIG"))
 	if err != nil {
-		log.Fatal(err)
+		printErr( "error loading krb5.conf", err)
+		os.Exit(1)
 	}
 
 	password, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil && password == "" {
-		log.Fatal("no password on stdin: ", err)
+		printErr("no password on stdin", err)
+		os.Exit(2)
 	}
 
 	cl := client.NewWithPassword(*user, *realm, strings.TrimSpace(password), cfg)
 	defer cl.Destroy()
 
 	if err := cl.Login(); err != nil {
-		log.Fatal(err)
+		printErr("login error", err)
+		os.Exit(3)
 	}
 
 	// Written with mode 0600, by rename: as kinit does.
 	if err := cl.SaveCCache(*path); err != nil {
-		log.Fatal(err)
+		printErr("save cache error", err)
+		os.Exit(4)
 	}
 
 	fmt.Println("saved", *path)
@@ -53,25 +56,33 @@ func main() {
 	// A new client, which knows only the file.
 	c, err := credentials.LoadCCache(*path)
 	if err != nil {
-		log.Fatal(err)
+		printErr("error loading ccache", err)
+		os.Exit(5)
 	}
 
 	fromCache, err := client.NewFromCCache(c, cfg)
 	if err != nil {
-		log.Fatal(err)
+		printErr( "error loading from ccache", err)
+		os.Exit(5)
 	}
 
 	defer fromCache.Destroy()
 
 	tkt, _, err := fromCache.GetServiceTicket(*spn)
 	if err != nil {
-		log.Fatal(err)
+		printErr( "error getting a service ticket", err)
+		os.Exit(7)
 	}
 
 	fmt.Printf("from the cache, as %s: a ticket to %s\n", fromCache.Credentials.UserName(), tkt.SName.PrincipalNameString())
 
 	// The file again, with the new ticket in it too.
 	if err := fromCache.SaveCCache(*path); err != nil {
-		log.Fatal(err)
+		printErr("error saving the ccache", err)
+		os.Exit(8)
 	}
+}
+
+func printErr(msg string, err error) {
+	_, _ = fmt.Fprintf(os.Stderr, "%s: %v\n", msg, err)
 }
