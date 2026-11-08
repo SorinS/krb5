@@ -36,8 +36,7 @@ type Client struct {
 	sessions    *sessions
 	cache       *Cache
 
-	// The KDC's clock less ours, in nanoseconds, learned from the KDC
-	// (kdc_timesync).
+	// The KDC's clock less ours, in nanoseconds, learned from the KDC (kdc_timesync).
 	timeOffset atomic.Int64
 
 	// The realms whose KDCs said they do FAST: realm -> true.
@@ -328,7 +327,7 @@ func (cl *Client) IsConfigured() (bool, error) {
 	}
 
 	if cl.Credentials.Domain() == "" {
-		return false, errors.New("client does not have a define realm")
+		return false, errors.New("client does not have a defined realm")
 	}
 	// Client needs to have either a password, keytab or a session already (later when loading from CCache).
 	if !cl.hasSecret() {
@@ -505,7 +504,7 @@ func (cl *Client) Diagnostics(w io.Writer) error {
 		errs = append(errs, "no KDCs resolved for communication via UDP.")
 	} else {
 		b, _ := json.MarshalIndent(&udpKDC, "", "  ")
-		fmt.Fprintf(w, "UDP KDCs: %s\n", string(b))
+		_,_ = fmt.Fprintf(w, "UDP KDCs: %s\n", string(b))
 	}
 
 	tcpCnt, tcpKDC, err := cl.Config.GetKDCs(cl.Credentials.Realm(), false)
@@ -517,7 +516,7 @@ func (cl *Client) Diagnostics(w io.Writer) error {
 		errs = append(errs, "no KDCs resolved for communication via TCP.")
 	} else {
 		b, _ := json.MarshalIndent(&tcpKDC, "", "  ")
-		fmt.Fprintf(w, "TCP KDCs: %s\n", string(b))
+		_,_ = fmt.Fprintf(w, "TCP KDCs: %s\n", string(b))
 	}
 
 	if len(errs) > 0 {
@@ -530,20 +529,20 @@ func (cl *Client) Diagnostics(w io.Writer) error {
 // Print writes the details of the client to the io.Writer provided.
 func (cl *Client) Print(w io.Writer) {
 	c, _ := cl.Credentials.JSON()
-	fmt.Fprintf(w, "Credentials:\n%s\n", c)
+	_,_ = fmt.Fprintf(w, "Credentials:\n%s\n", c)
 
 	s, _ := cl.sessions.JSON()
-	fmt.Fprintf(w, "TGT Sessions:\n%s\n", s)
+	_,_ = fmt.Fprintf(w, "TGT Sessions:\n%s\n", s)
 
 	c, _ = cl.cache.JSON()
-	fmt.Fprintf(w, "Service ticket cache:\n%s\n", c)
+	_,_ = fmt.Fprintf(w, "Service ticket cache:\n%s\n", c)
 
 	s, _ = cl.settings.JSON()
-	fmt.Fprintf(w, "Settings:\n%s\n", s)
+	_,_ = fmt.Fprintf(w, "Settings:\n%s\n", s)
 
 	j, _ := cl.Config.JSON()
-	fmt.Fprintf(w, "Krb5 config:\n%s\n", j)
+	_,_ = fmt.Fprintf(w, "Krb5 config:\n%s\n", j)
 
 	k, _ := cl.Credentials.Keytab().JSON()
-	fmt.Fprintf(w, "Keytab:\n%s\n", k)
+	_,_ = fmt.Fprintf(w, "Keytab:\n%s\n", k)
 }
