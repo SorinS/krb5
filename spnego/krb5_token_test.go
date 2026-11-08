@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/gssapi"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/test/testdata"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/gssapi"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/test/testdata"
+	"github.com/SorinS/krb5/types"
 )
 
 const (

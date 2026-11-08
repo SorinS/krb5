@@ -1,6 +1,6 @@
 # Changelog
 
-What this fork (`github.com/go-krb5/krb5`, SorinS/krb5) adds to
+What this fork (`github.com/SorinS/krb5`, SorinS/krb5) adds to
 `github.com/jcmturner/gokrb5/v8`. Behaviour changes are spelled out in
 [BREAKING.md](BREAKING.md); how to run the tests is in
 [test/README.md](test/README.md).

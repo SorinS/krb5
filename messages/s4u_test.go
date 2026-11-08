@@ -7,12 +7,12 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/types"
 )
 
 // What VerifyS4U refuses of a reply: the client not the user, and a

@@ -13,9 +13,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/types"
 )
 
 const (

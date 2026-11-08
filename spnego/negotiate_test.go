@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/gssapi"
+	"github.com/SorinS/krb5/gssapi"
 )
 
 // Accept's negotiation-state logic, before any Kerberos token is processed, so

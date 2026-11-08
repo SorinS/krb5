@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/keytab"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/keytab"
 )
 
 func TestAssumePreauthentication(t *testing.T) {

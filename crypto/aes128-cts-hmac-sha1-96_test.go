@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/crypto/common"
-	"github.com/go-krb5/krb5/crypto/rfc3962"
+	"github.com/SorinS/krb5/crypto/common"
+	"github.com/SorinS/krb5/crypto/rfc3962"
 )
 
 // TestAes128CtsHmacSha196_StringToKey handles test vectors from RFC 3962 Appendix B.

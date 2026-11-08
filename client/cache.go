@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // Cache for service tickets held by the client.

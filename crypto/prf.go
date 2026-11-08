@@ -9,11 +9,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-krb5/krb5/crypto/rfc3961"
-	"github.com/go-krb5/krb5/crypto/rfc6803"
-	"github.com/go-krb5/krb5/crypto/rfc8009"
-	"github.com/go-krb5/krb5/iana/etypeID"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto/rfc3961"
+	"github.com/SorinS/krb5/crypto/rfc6803"
+	"github.com/SorinS/krb5/crypto/rfc8009"
+	"github.com/SorinS/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/types"
 )
 
 // PRF is the encryption type's pseudo-random function (RFC 3961 section

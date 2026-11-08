@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/types"
 )
 
 // A decrypted ticket marshals as it came: its session key must not go out.

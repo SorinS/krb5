@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/test"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/test"
 )
 
 // A live AD's claims (test/ad/claims.ps1): carol's six string claims

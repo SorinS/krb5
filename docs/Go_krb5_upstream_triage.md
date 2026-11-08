@@ -1,4 +1,4 @@
-# gokrb5 upstream triage against the go-krb5/krb5 fork
+# gokrb5 upstream triage against the SorinS/krb5 fork
 
 Date: 2026-11-03.
 Upstream: https://github.com/jcmturner/gokrb5. The list covers 31 open PRs, about 100 open issues, and the closed-unmerged PRs among the last 100 closed. The data came from the unauthenticated REST API and the PR `.diff` files.

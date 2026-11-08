@@ -8,7 +8,7 @@ import (
 	"github.com/go-krb5/x/rpc/mstypes"
 	"github.com/go-krb5/x/rpc/ndr"
 
-	"github.com/go-krb5/krb5/pac/xpress"
+	"github.com/SorinS/krb5/pac/xpress"
 )
 
 // claimsSet decodes the ClaimsSet in a CLAIMS_SET_METADATA (MS-ADTS

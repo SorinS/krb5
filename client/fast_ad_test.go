@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/test"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/test"
 )
 
 // FAST with a live AD (its "KDC support for claims, compound authentication

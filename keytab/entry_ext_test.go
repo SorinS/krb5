@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana/etypeID"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/types"
 )
 
 // A program outside the package can read and change keytab entries: the Entry

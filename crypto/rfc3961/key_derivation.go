@@ -3,7 +3,7 @@ package rfc3961
 import (
 	"bytes"
 
-	"github.com/go-krb5/krb5/crypto/etype"
+	"github.com/SorinS/krb5/crypto/etype"
 )
 
 const (

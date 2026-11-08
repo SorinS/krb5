@@ -2,10 +2,10 @@
 package kadmin
 
 import (
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // ChangePasswdMsg generates a request for a principal to change its own

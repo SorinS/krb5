@@ -76,7 +76,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/go-krb5/krb5
+        - github.com/SorinS/krb5
   exclusions:
     generated: lax
     paths:

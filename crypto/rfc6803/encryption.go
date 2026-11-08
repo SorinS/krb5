@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-krb5/krb5/crypto/common"
-	"github.com/go-krb5/krb5/crypto/etype"
+	"github.com/SorinS/krb5/crypto/common"
+	"github.com/SorinS/krb5/crypto/etype"
 )
 
 // EncryptData encrypts the data provided using Camellia-CBC-CTS.

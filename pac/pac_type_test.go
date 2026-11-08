@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/test/testdata"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/test/testdata"
+	"github.com/SorinS/krb5/types"
 )
 
 func TestPACTypeVerify(t *testing.T) {

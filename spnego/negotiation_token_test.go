@@ -6,8 +6,8 @@ import (
 	"github.com/go-krb5/x/encoding/asn1"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/go-krb5/krb5/gssapi"
-	"github.com/go-krb5/krb5/keytab"
+	"github.com/SorinS/krb5/gssapi"
+	"github.com/SorinS/krb5/keytab"
 )
 
 var (

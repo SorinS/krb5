@@ -18,7 +18,7 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/iana/etypeID"
 )
 
 // Config represents the KRB5 configuration.

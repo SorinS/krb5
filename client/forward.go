@@ -3,11 +3,11 @@ package client
 import (
 	"errors"
 
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // GetForwardedTGT asks the KDC for a forwarded copy of the client's TGT

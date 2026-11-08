@@ -14,18 +14,18 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/crypto/etype"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/pkinit"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/crypto/etype"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/pkinit"
+	"github.com/SorinS/krb5/types"
 )
 
 // Client side configuration and state.

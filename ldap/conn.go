@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/gsskrb5"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/gsskrb5"
 )
 
 // Protocol operations' tags (RFC 4511 4.2 to 4.12).

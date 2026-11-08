@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/types"
 )
 
 // Replay cache is required as specified in RFC 4120 section 3.2.3.

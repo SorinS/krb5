@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/test/testdata"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/test/testdata"
 )
 
 func TestClient_Login_DNSKDCs(t *testing.T) {

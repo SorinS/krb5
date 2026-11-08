@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/crypto/common"
-	"github.com/go-krb5/krb5/crypto/rfc8009"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/crypto/common"
+	"github.com/SorinS/krb5/crypto/rfc8009"
 )
 
 func TestStringToKey(t *testing.T) {

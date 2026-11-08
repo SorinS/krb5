@@ -9,10 +9,10 @@ import (
 
 	"golang.org/x/crypto/md4"
 
-	"github.com/go-krb5/krb5/crypto/rfc3961"
-	"github.com/go-krb5/krb5/crypto/rfc4757"
-	"github.com/go-krb5/krb5/iana/chksumtype"
-	"github.com/go-krb5/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/crypto/rfc3961"
+	"github.com/SorinS/krb5/crypto/rfc4757"
+	"github.com/SorinS/krb5/iana/chksumtype"
+	"github.com/SorinS/krb5/iana/etypeID"
 )
 
 // RC4HMAC implements Kerberos encryption type rc4-hmac.

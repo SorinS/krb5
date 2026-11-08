@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-krb5/x/rpc/mstypes"
 
-	"github.com/go-krb5/krb5/iana/chksumtype"
+	"github.com/SorinS/krb5/iana/chksumtype"
 )
 
 /*

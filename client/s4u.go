@@ -3,10 +3,10 @@ package client
 import (
 	"crypto/x509"
 
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // GetServiceTicketForUser is S4U2Self (MS-SFU): a ticket to this client (a

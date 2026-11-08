@@ -6,11 +6,11 @@ import (
 	"crypto/sha1"
 	"hash"
 
-	"github.com/go-krb5/krb5/crypto/common"
-	"github.com/go-krb5/krb5/crypto/rfc3961"
-	"github.com/go-krb5/krb5/crypto/rfc3962"
-	"github.com/go-krb5/krb5/iana/chksumtype"
-	"github.com/go-krb5/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/crypto/common"
+	"github.com/SorinS/krb5/crypto/rfc3961"
+	"github.com/SorinS/krb5/crypto/rfc3962"
+	"github.com/SorinS/krb5/iana/chksumtype"
+	"github.com/SorinS/krb5/iana/etypeID"
 )
 
 // RFC 3962.

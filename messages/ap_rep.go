@@ -6,10 +6,10 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/iana/asn1apptag"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/asn1apptag"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/types"
 )
 
 // APRep implements RFC 4120 KRB_AP_REP: https://tools.ietf.org/html/rfc4120#section-5.5.2.

@@ -22,12 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/service"
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/test/testdata"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/service"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/test/testdata"
 )
 
 func TestClient_SetSPNEGOHeader(t *testing.T) {

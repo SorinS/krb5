@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/types"
 )
 
 // testdata/mit_crypto.txt is MIT's libk5crypto's output (krb5_c_prf,

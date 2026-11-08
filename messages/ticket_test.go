@@ -10,14 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana"
-	"github.com/go-krb5/krb5/iana/addrtype"
-	"github.com/go-krb5/krb5/iana/adtype"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/iana/trtype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/test/testdata"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana"
+	"github.com/SorinS/krb5/iana/addrtype"
+	"github.com/SorinS/krb5/iana/adtype"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/iana/trtype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/test/testdata"
+	"github.com/SorinS/krb5/types"
 )
 
 func TestUnmarshalTicket(t *testing.T) {

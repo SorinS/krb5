@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/go-krb5/krb5/crypto/etype"
-	"github.com/go-krb5/krb5/iana/etypeID"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto/etype"
+	"github.com/SorinS/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/types"
 )
 
 // Every encryption type refuses ciphertext too short for its confounder,

@@ -12,12 +12,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/types"
 )
 
 func main() {

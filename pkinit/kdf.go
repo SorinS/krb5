@@ -8,8 +8,8 @@ import (
 
 	krbasn1 "github.com/go-krb5/x/encoding/asn1"
 
-	kcrypto "github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/types"
+	kcrypto "github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/types"
 )
 
 // A KDF is one of RFC 8636's key derivation functions, by its hash; KDFOld

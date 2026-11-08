@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/types"
 )
 
 // signatureDataTypeLength is the size of a PAC_SIGNATURE_DATA's SignatureType field.

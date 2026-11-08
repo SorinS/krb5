@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/iana/etypeID"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/test/testdata"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/test/testdata"
+	"github.com/SorinS/krb5/types"
 )
 
 func TestClient_SuccessfulLogin_AD(t *testing.T) {

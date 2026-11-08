@@ -7,17 +7,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/pkinit"
-	"github.com/go-krb5/krb5/spake"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/pkinit"
+	"github.com/SorinS/krb5/spake"
+	"github.com/SorinS/krb5/types"
 )
 
 // ASExchange performs an AS exchange for the client to retrieve a TGT.

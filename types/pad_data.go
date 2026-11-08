@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/iana/patype"
+	"github.com/SorinS/krb5/iana/patype"
 )
 
 // PAData implements RFC 4120 types: https://tools.ietf.org/html/rfc4120#section-5.2.7

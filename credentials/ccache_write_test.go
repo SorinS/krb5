@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/test/testdata"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/test/testdata"
+	"github.com/SorinS/krb5/types"
 )
 
 // A cache read and written again is the same bytes: go-krb5's vector (a

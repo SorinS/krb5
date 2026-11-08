@@ -7,18 +7,18 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/asn1tools"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana"
-	"github.com/go-krb5/krb5/iana/adtype"
-	"github.com/go-krb5/krb5/iana/asn1apptag"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/pac"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/asn1tools"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana"
+	"github.com/SorinS/krb5/iana/adtype"
+	"github.com/SorinS/krb5/iana/asn1apptag"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/pac"
+	"github.com/SorinS/krb5/types"
 )
 
 // Reference: https://www.ietf.org/rfc/rfc4120.txt

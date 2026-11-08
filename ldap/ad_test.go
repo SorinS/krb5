@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/gsskrb5"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/ldap"
-	"github.com/go-krb5/krb5/test"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/gsskrb5"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/ldap"
+	"github.com/SorinS/krb5/test"
 )
 
 // A live Active Directory's LDAP (TEST_AD_LDAP, its address; TEST_AD_DC_HOST,

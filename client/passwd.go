@@ -3,9 +3,9 @@ package client
 import (
 	"fmt"
 
-	"github.com/go-krb5/krb5/kadmin"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/kadmin"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // Kpasswd server response codes.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-krb5/krb5/client"
+	"github.com/SorinS/krb5/client"
 )
 
 // SASL GSSAPI security layers (RFC 4752 3.3).

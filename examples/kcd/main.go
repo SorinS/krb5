@@ -18,14 +18,14 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/spnego"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/spnego"
+	"github.com/SorinS/krb5/types"
 )
 
 func main() {

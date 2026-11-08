@@ -3,9 +3,9 @@ package service
 import (
 	"time"
 
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/messages"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/messages"
 )
 
 // VerifyAPREQ verifies an AP_REQ sent to the service. Returns a boolean for if the AP_REQ is valid and the client's principal name and realm.

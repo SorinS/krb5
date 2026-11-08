@@ -45,10 +45,10 @@ import (
 
 	krbasn1 "github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/config"
-	kcrypto "github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/config"
+	kcrypto "github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/types"
 )
 
 var (

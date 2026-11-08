@@ -15,14 +15,14 @@ import (
 	"github.com/go-krb5/x/encoding/asn1"
 	"github.com/go-krb5/x/identity"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/gssapi"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/service"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/gssapi"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/service"
+	"github.com/SorinS/krb5/types"
 )
 
 // Client side functionality.
@@ -270,7 +270,7 @@ func SetSPNEGOHeader(cl *client.Client, r *http.Request, spn string) error {
 type ctxKey string
 
 const (
-	credentialsKey = "github.com/go-krb5/krb5/spnego/credentials"
+	credentialsKey = "github.com/SorinS/krb5/spnego/credentials"
 
 	// spnegoNegTokenRespKRBAcceptCompleted - The response on successful authentication always has this header. Capturing as const so we don't have marshaling and encoding overhead.
 	spnegoNegTokenRespKRBAcceptCompleted = "Negotiate oRQwEqADCgEAoQsGCSqGSIb3EgECAg=="

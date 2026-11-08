@@ -3,7 +3,7 @@ package types
 import (
 	"strings"
 
-	"github.com/go-krb5/krb5/iana/nametype"
+	"github.com/SorinS/krb5/iana/nametype"
 )
 
 // Reference: https://www.ietf.org/rfc/rfc4120.txt

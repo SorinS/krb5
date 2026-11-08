@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/types"
 )
 
 const (

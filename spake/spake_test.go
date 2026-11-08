@@ -13,9 +13,9 @@ import (
 	"filippo.io/nistec"
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/types"
 )
 
 // testdata/vectors.txt is Appendix C of draft-ietf-kitten-krb-spake-preauth

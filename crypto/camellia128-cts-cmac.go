@@ -5,9 +5,9 @@ import (
 	"crypto/sha1"
 	"hash"
 
-	"github.com/go-krb5/krb5/crypto/rfc6803"
-	"github.com/go-krb5/krb5/iana/chksumtype"
-	"github.com/go-krb5/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/crypto/rfc6803"
+	"github.com/SorinS/krb5/iana/chksumtype"
+	"github.com/SorinS/krb5/iana/etypeID"
 )
 
 // RFC 6803.

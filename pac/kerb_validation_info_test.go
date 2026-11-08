@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/test/testdata"
+	"github.com/SorinS/krb5/test/testdata"
 )
 
 func TestKerbValidationInfo_Unmarshal(t *testing.T) {

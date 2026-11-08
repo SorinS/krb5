@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/config"
+	"github.com/SorinS/krb5/config"
 )
 
 // pipeDialer gives one end of a pipe, not a *net.TCPConn: as a proxy's

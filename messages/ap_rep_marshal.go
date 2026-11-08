@@ -5,14 +5,14 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/asn1tools"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana"
-	"github.com/go-krb5/krb5/iana/asn1apptag"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/asn1tools"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana"
+	"github.com/SorinS/krb5/iana/asn1apptag"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/types"
 )
 
 // encAPRepPartNoSubkey is EncAPRepPart without the optional subkey, which

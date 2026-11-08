@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-krb5/x/rpc/mstypes"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/types"
 )
 
 const (

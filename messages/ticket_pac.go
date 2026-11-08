@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/adtype"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/pac"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/adtype"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/pac"
+	"github.com/SorinS/krb5/types"
 )
 
 // VerifyPACKDC checks the KDC's signatures in the ticket's PAC with the key

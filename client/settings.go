@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/go-krb5/krb5/messages"
+	"github.com/SorinS/krb5/messages"
 )
 
 // Settings holds optional client settings.

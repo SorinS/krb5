@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/iana/etypeID"
 )
 
 // What MIT takes and this parser did not (upstream PR 448, CL 523, issues

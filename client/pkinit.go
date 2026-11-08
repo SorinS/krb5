@@ -1,11 +1,11 @@
 package client
 
 import (
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/pkinit"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/pkinit"
+	"github.com/SorinS/krb5/types"
 )
 
 // AnonymousName is the anonymous principal's name, WELLKNOWN/ANONYMOUS

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // kpasswd protocol version numbers (RFC 3244).

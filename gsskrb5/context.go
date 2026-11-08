@@ -27,18 +27,18 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/chksumtype"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/etypeID"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/service"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/chksumtype"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/etypeID"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/service"
+	"github.com/SorinS/krb5/types"
 )
 
 // OID is the Kerberos V5 mechanism's (RFC 1964).

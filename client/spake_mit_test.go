@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/spake"
-	"github.com/go-krb5/krb5/test"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/spake"
+	"github.com/SorinS/krb5/test"
 )
 
 // mitConfigGroups is the MIT test krb5.conf with spake_preauth_groups set.

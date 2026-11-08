@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/crypto/rfc3961"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/crypto/rfc3961"
 )
 
 func TestDES3DeriveRandom(t *testing.T) {

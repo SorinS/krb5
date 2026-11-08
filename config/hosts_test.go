@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/test/testdata"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/test/testdata"
 )
 
 // TestConfig_GetKDCsUsesConfiguredKDC is meant to cover the fix for https://github.com/jcmturner/gokrb5/issues/332,

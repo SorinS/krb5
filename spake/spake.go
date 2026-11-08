@@ -46,8 +46,8 @@ import (
 	"filippo.io/edwards25519"
 	"filippo.io/nistec"
 
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/types"
 )
 
 // The groups' numbers (the draft's IANA registry).

@@ -18,8 +18,8 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/test"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/test"
 )
 
 // proxyMessage is an independent decoding of [MS-KKDCP] KDC-PROXY-MESSAGE,

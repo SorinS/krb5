@@ -13,10 +13,10 @@ import (
 
 	"github.com/go-krb5/x/identity"
 
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/service"
-	"github.com/go-krb5/krb5/spnego"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/service"
+	"github.com/SorinS/krb5/spnego"
 )
 
 func main() {

@@ -9,17 +9,17 @@ import (
 
 	"github.com/go-krb5/x/encoding/asn1"
 
-	"github.com/go-krb5/krb5/asn1tools"
-	"github.com/go-krb5/krb5/config"
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/crypto"
-	"github.com/go-krb5/krb5/iana/asn1apptag"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/keyusage"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/krberror"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/asn1tools"
+	"github.com/SorinS/krb5/config"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/crypto"
+	"github.com/SorinS/krb5/iana/asn1apptag"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/keyusage"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/krberror"
+	"github.com/SorinS/krb5/types"
 )
 
 type marshalKDCRep struct {

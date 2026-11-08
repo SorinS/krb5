@@ -6,10 +6,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/types"
 )
 
 // A.TEST's kadmind (test/mitkdc) serves kpasswd. ChangePasswd changes a

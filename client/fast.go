@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-krb5/krb5/credentials"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/credentials"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/types"
 )
 
 // FASTArmor makes the client armor its AS exchanges with FAST (RFC 6113),

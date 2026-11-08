@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/iana"
-	"github.com/go-krb5/krb5/iana/msgtype"
-	"github.com/go-krb5/krb5/test/testdata"
+	"github.com/SorinS/krb5/iana"
+	"github.com/SorinS/krb5/iana/msgtype"
+	"github.com/SorinS/krb5/test/testdata"
 )
 
 func TestUnmarshalAPRep(t *testing.T) {

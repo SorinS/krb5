@@ -10,15 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-krb5/krb5/client"
-	"github.com/go-krb5/krb5/iana/errorcode"
-	"github.com/go-krb5/krb5/iana/flags"
-	"github.com/go-krb5/krb5/iana/nametype"
-	"github.com/go-krb5/krb5/iana/patype"
-	"github.com/go-krb5/krb5/keytab"
-	"github.com/go-krb5/krb5/messages"
-	"github.com/go-krb5/krb5/test"
-	"github.com/go-krb5/krb5/types"
+	"github.com/SorinS/krb5/client"
+	"github.com/SorinS/krb5/iana/errorcode"
+	"github.com/SorinS/krb5/iana/flags"
+	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/iana/patype"
+	"github.com/SorinS/krb5/keytab"
+	"github.com/SorinS/krb5/messages"
+	"github.com/SorinS/krb5/test"
+	"github.com/SorinS/krb5/types"
 )
 
 // assertS4UEcho makes the S4U2Self exchange itself, to see that the KDC's
