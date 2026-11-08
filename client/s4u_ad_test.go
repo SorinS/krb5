@@ -9,7 +9,6 @@ import (
 	"errors"
 	"math/big"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,20 +28,13 @@ import (
 )
 
 // readPAC decrypts a ticket with its service account's password (the account
-// named, its key by the default salt, the kvno the ticket's) and reads
-// its PAC.
+// named, of the ticket's realm, its key by the default salt, the kvno the
+// ticket's) and reads its PAC.
 func readPAC(t *testing.T, tkt *messages.Ticket, account, password string) pac.PACType {
 	t.Helper()
 
-	return readPACIn(t, tkt, account, "GOOSE.TEST", password)
-}
-
-// readPACIn is readPAC for an account of the realm given.
-func readPACIn(t *testing.T, tkt *messages.Ticket, account, realm, password string) pac.PACType {
-	t.Helper()
-
 	kt := keytab.New()
-	require.NoError(t, kt.AddEntry(account, realm, password, time.Now(), uint8(tkt.EncPart.KVNO), tkt.EncPart.EType))
+	require.NoError(t, kt.AddEntry(account, tkt.Realm, password, time.Now(), uint8(tkt.EncPart.KVNO), tkt.EncPart.EType))
 
 	name := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, account)
 	require.NoError(t, tkt.DecryptEncPart(kt, &name))
@@ -67,8 +59,7 @@ func TestClient_S4UCrossRealm_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
-	home := cfg.LibDefaults.DefaultRealm
-	require.NotEmpty(t, home, "the krb5.conf's default_realm is the service's realm")
+	home, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
 
 	proxy := client.NewWithPassword("svc-proxy", home, password, cfg)
 	require.NoError(t, proxy.Login())
@@ -82,7 +73,7 @@ func TestClient_S4UCrossRealm_AD(t *testing.T) {
 		assert.Equal(t, "svc-proxy", self.SName.PrincipalNameString(), "the service's own name, not the enterprise one")
 		assert.Equal(t, home, self.Realm)
 
-		p := readPACIn(t, &self, "svc-proxy", home, password)
+		p := readPAC(t, &self, "svc-proxy", password)
 		assert.Equal(t, user, self.DecryptedEncPart.CName.PrincipalNameString())
 		assert.Equal(t, peer, self.DecryptedEncPart.CRealm)
 		assert.Equal(t, user, p.ClientInfo.Name)
@@ -97,9 +88,9 @@ func TestClient_S4UCrossRealm_AD(t *testing.T) {
 
 	// The service's own session is still its own: a ticket for itself in its
 	// own name, after the referrals that carried the users' PACs.
-	own, _, err := proxy.GetServiceTicket("HTTP/proxy." + strings.ToLower(home))
+	own, _, err := proxy.GetServiceTicket("HTTP/proxy." + domain)
 	require.NoError(t, err)
-	readPACIn(t, &own, "svc-proxy", home, password)
+	readPAC(t, &own, "svc-proxy", password)
 	assert.Equal(t, "svc-proxy", own.DecryptedEncPart.CName.PrincipalNameString())
 }
 
@@ -110,12 +101,14 @@ func TestClient_S4U_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
 	// A forwardable TGT: S4U2Self's ticket can be no more forwardable than
 	// it (and alice's ticket, below).
 	cfg.LibDefaults.Forwardable = true
 
 	login := func(name string) *client.Client {
-		cl := client.NewWithPassword(name, "GOOSE.TEST", password, cfg)
+		cl := client.NewWithPassword(name, realm, password, cfg)
 		require.NoError(t, cl.Login(), name)
 
 		return cl
@@ -135,7 +128,7 @@ func TestClient_S4U_AD(t *testing.T) {
 
 	// Protocol transition: a forwardable ticket to svc-proxy in alice's
 	// name, with alice's PAC.
-	self, _, err := proxy.GetServiceTicketForUser(alice, "GOOSE.TEST")
+	self, _, err := proxy.GetServiceTicketForUser(alice, realm)
 	require.NoError(t, err)
 
 	p := readPAC(t, &self, "svc-proxy", password)
@@ -143,17 +136,17 @@ func TestClient_S4U_AD(t *testing.T) {
 	assert.Equal(t, "alice", p.ClientInfo.Name)
 	assert.True(t, types.IsFlagSet(&self.DecryptedEncPart.Flags, flags.Forwardable))
 
-	assertS4UEcho(t, proxy, alice, "GOOSE.TEST")
+	assertS4UEcho(t, proxy, alice, realm)
 
 	// By enterprise name too.
-	ent, _, err := proxy.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_ENTERPRISE, "alice@goose.test"), "GOOSE.TEST")
+	ent, _, err := proxy.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_ENTERPRISE, "alice@"+domain), realm)
 	require.NoError(t, err)
 	readPAC(t, &ent, "svc-proxy", password)
-	assert.Equal(t, "alice@goose.test", ent.DecryptedEncPart.CName.PrincipalNameString(), "AD keeps the name asked for")
+	assert.Equal(t, "alice@"+domain, ent.DecryptedEncPart.CName.PrincipalNameString(), "AD keeps the name asked for")
 
 	// Constrained delegation to the service it may delegate to, with the
 	// transited service in the PAC.
-	target, skey, err := proxy.GetServiceTicketForProxy("HTTP/target.goose.test", self)
+	target, skey, err := proxy.GetServiceTicketForProxy("HTTP/target."+domain, self)
 	require.NoError(t, err)
 	require.NotEmpty(t, skey.KeyValue)
 
@@ -161,87 +154,87 @@ func TestClient_S4U_AD(t *testing.T) {
 	assert.Equal(t, "alice", target.DecryptedEncPart.CName.PrincipalNameString())
 	assert.Equal(t, "alice", p.ClientInfo.Name)
 	require.NotNil(t, p.S4UDelegationInfo)
-	assert.Equal(t, "HTTP/target.goose.test", p.S4UDelegationInfo.S4U2proxyTarget.Value)
+	assert.Equal(t, "HTTP/target."+domain, p.S4UDelegationInfo.S4U2proxyTarget.Value)
 
 	// The same with a user's ticket given to the service, not made by
 	// S4U2Self: alice's own, forwardable, ticket to svc-proxy.
 	user := login("alice")
-	own, _, err := user.GetServiceTicket("HTTP/proxy.goose.test")
+	own, _, err := user.GetServiceTicket("HTTP/proxy." + domain)
 	require.NoError(t, err)
 
-	viaOwn, _, err := proxy.GetServiceTicketForProxy("HTTP/target.goose.test", own)
+	viaOwn, _, err := proxy.GetServiceTicketForProxy("HTTP/target."+domain, own)
 	require.NoError(t, err)
 	p = readPAC(t, &viaOwn, "svc-target", password)
 	assert.Equal(t, "alice", p.ClientInfo.Name)
 
 	// Not to a service it may not delegate to.
-	_, _, err = proxy.GetServiceTicketForProxy("HTTP/rbcdt.goose.test", self)
+	_, _, err = proxy.GetServiceTicketForProxy("HTTP/rbcdt."+domain, self)
 	badOption(err, "a target not allowed")
 
 	// Delegation targets without protocol transition: S4U2Self's ticket is
 	// not forwardable and no use to S4U2Proxy; the user's own ticket is.
 	kerb := login("svc-kerb")
-	kt, _, err := kerb.GetServiceTicketForUser(alice, "GOOSE.TEST")
+	kt, _, err := kerb.GetServiceTicketForUser(alice, realm)
 	require.NoError(t, err)
 	readPAC(t, &kt, "svc-kerb", password)
 	assert.False(t, types.IsFlagSet(&kt.DecryptedEncPart.Flags, flags.Forwardable))
 
-	_, _, err = kerb.GetServiceTicketForProxy("HTTP/target.goose.test", kt)
+	_, _, err = kerb.GetServiceTicketForProxy("HTTP/target."+domain, kt)
 	badOption(err, "a non-forwardable S4U2Self ticket")
 
-	ownK, _, err := user.GetServiceTicket("HTTP/kerb.goose.test")
+	ownK, _, err := user.GetServiceTicket("HTTP/kerb." + domain)
 	require.NoError(t, err)
 
-	_, _, err = kerb.GetServiceTicketForProxy("HTTP/target.goose.test", ownK)
+	_, _, err = kerb.GetServiceTicketForProxy("HTTP/target."+domain, ownK)
 	require.NoError(t, err)
 
 	// No delegation configured: a forwardable ticket all the same (Server
 	// 2022, as MIT), which S4U2Proxy still refuses.
 	plain := login("svc-self")
-	st, _, err := plain.GetServiceTicketForUser(alice, "GOOSE.TEST")
+	st, _, err := plain.GetServiceTicketForUser(alice, realm)
 	require.NoError(t, err)
 	readPAC(t, &st, "svc-self", password)
 	assert.True(t, types.IsFlagSet(&st.DecryptedEncPart.Flags, flags.Forwardable))
 
-	_, _, err = plain.GetServiceTicketForProxy("HTTP/target.goose.test", st)
+	_, _, err = plain.GetServiceTicketForProxy("HTTP/target."+domain, st)
 	badOption(err, "a service without delegation")
 
 	// A sensitive user: S4U2Proxy refused, however allowed the service.
-	sens, _, err := proxy.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "sens"), "GOOSE.TEST")
+	sens, _, err := proxy.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "sens"), realm)
 	require.NoError(t, err)
 	readPAC(t, &sens, "svc-proxy", password)
 	assert.False(t, types.IsFlagSet(&sens.DecryptedEncPart.Flags, flags.Forwardable))
 
-	_, _, err = proxy.GetServiceTicketForProxy("HTTP/target.goose.test", sens)
+	_, _, err = proxy.GetServiceTicketForProxy("HTTP/target."+domain, sens)
 	badOption(err, "a sensitive user")
 
 	// Resource-based: the target lets svc-rbcd, which has no delegation of
 	// its own.
 	rbcd := login("svc-rbcd")
-	rs, _, err := rbcd.GetServiceTicketForUser(alice, "GOOSE.TEST")
+	rs, _, err := rbcd.GetServiceTicketForUser(alice, realm)
 	require.NoError(t, err)
 	readPAC(t, &rs, "svc-rbcd", password)
 
-	rt, _, err := rbcd.GetServiceTicketForProxy("HTTP/rbcdt.goose.test", rs)
+	rt, _, err := rbcd.GetServiceTicketForProxy("HTTP/rbcdt."+domain, rs)
 	require.NoError(t, err)
 	p = readPAC(t, &rt, "svc-rbcdt", password)
 	assert.Equal(t, "alice", p.ClientInfo.Name)
 
-	_, _, err = rbcd.GetServiceTicketForProxy("HTTP/target.goose.test", rs)
+	_, _, err = rbcd.GetServiceTicketForProxy("HTTP/target."+domain, rs)
 	badOption(err, "a target that does not allow it")
 
 	// Armored, as a machine would: FAST's implicit armor on the S4U requests.
-	armor, err := client.NewWithPassword("goosepc$", "GOOSE.TEST", password, cfg).Armor()
+	armor, err := client.NewWithPassword("goosepc$", realm, password, cfg).Armor()
 	require.NoError(t, err)
 
-	armored := client.NewWithPassword("svc-proxy", "GOOSE.TEST", password, cfg, client.FASTArmor(armor))
+	armored := client.NewWithPassword("svc-proxy", realm, password, cfg, client.FASTArmor(armor))
 	require.NoError(t, armored.Login())
 
-	as, _, err := armored.GetServiceTicketForUser(alice, "GOOSE.TEST")
+	as, _, err := armored.GetServiceTicketForUser(alice, realm)
 	require.NoError(t, err)
 	readPAC(t, &as, "svc-proxy", password)
 
-	at, _, err := armored.GetServiceTicketForProxy("HTTP/target.goose.test", as)
+	at, _, err := armored.GetServiceTicketForProxy("HTTP/target."+domain, as)
 	require.NoError(t, err)
 	readPAC(t, &at, "svc-target", password)
 }
@@ -304,9 +297,11 @@ func TestClient_S4UCert_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
 	cfg.LibDefaults.Forwardable = true
 
-	proxy := client.NewWithPassword("svc-proxy", "GOOSE.TEST", password, cfg)
+	proxy := client.NewWithPassword("svc-proxy", realm, password, cfg)
 	require.NoError(t, proxy.Login())
 
 	now := time.Now()
@@ -319,12 +314,12 @@ func TestClient_S4UCert_AD(t *testing.T) {
 
 	p := readPAC(t, &self, "svc-proxy", password)
 	assert.Equal(t, "certie", self.DecryptedEncPart.CName.PrincipalNameString())
-	assert.Equal(t, "GOOSE.TEST", self.DecryptedEncPart.CRealm)
+	assert.Equal(t, realm, self.DecryptedEncPart.CRealm)
 	assert.Equal(t, "certie", p.ClientInfo.Name)
 	assert.True(t, types.IsFlagSet(&self.DecryptedEncPart.Flags, flags.Forwardable))
 
 	// It goes on to S4U2Proxy as any S4U2Self ticket does.
-	target, _, err := proxy.GetServiceTicketForProxy("HTTP/target.goose.test", self)
+	target, _, err := proxy.GetServiceTicketForProxy("HTTP/target."+domain, self)
 	require.NoError(t, err)
 
 	p = readPAC(t, &target, "svc-target", password)
@@ -335,7 +330,7 @@ func TestClient_S4UCert_AD(t *testing.T) {
 	armor, err := proxy.Armor()
 	require.NoError(t, err)
 
-	armored := client.NewWithPassword("svc-proxy", "GOOSE.TEST", password, cfg, client.FASTArmor(armor))
+	armored := client.NewWithPassword("svc-proxy", realm, password, cfg, client.FASTArmor(armor))
 	require.NoError(t, armored.Login())
 
 	as, _, err := armored.GetServiceTicketForCertificate(cert)
@@ -344,7 +339,7 @@ func TestClient_S4UCert_AD(t *testing.T) {
 
 	// A service with delegation targets but no protocol transition gets a
 	// ticket that is not forwardable, as by name.
-	kerb := client.NewWithPassword("svc-kerb", "GOOSE.TEST", password, cfg)
+	kerb := client.NewWithPassword("svc-kerb", realm, password, cfg)
 	require.NoError(t, kerb.Login())
 
 	kt, _, err := kerb.GetServiceTicketForCertificate(cert)

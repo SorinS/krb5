@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/SorinS/krb5/config"
 	"github.com/SorinS/krb5/test"
 )
 
@@ -169,9 +170,12 @@ func TestExamples_AD(t *testing.T) {
 	r := newRunner(t, filepath.Join(dir, "krb5.conf"))
 	stdin := password + "\n"
 
-	const realm = "GOOSE.TEST"
+	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
+	require.NoError(t, err)
 
-	assert.Contains(t, r.run("tgt-password", stdin, "-user", "alice", "-realm", realm), "alice@GOOSE.TEST")
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
+	assert.Contains(t, r.run("tgt-password", stdin, "-user", "alice", "-realm", realm), "alice@"+realm)
 
 	// A keytab for an account: its kvno, from a ticket to it.
 	keytabFor := func(account, spn string) string {
@@ -187,13 +191,13 @@ func TestExamples_AD(t *testing.T) {
 		return kt
 	}
 
-	proxy := keytabFor("svc-proxy", "HTTP/proxy.goose.test")
-	target := keytabFor("svc-target", "HTTP/target.goose.test")
+	proxy := keytabFor("svc-proxy", "HTTP/proxy."+domain)
+	target := keytabFor("svc-target", "HTTP/target."+domain)
 
-	assert.Contains(t, r.run("tgt-keytab", "", "-keytab", proxy, "-principal", "svc-proxy", "-realm", realm), "for svc-proxy@GOOSE.TEST")
+	assert.Contains(t, r.run("tgt-keytab", "", "-keytab", proxy, "-principal", "svc-proxy", "-realm", realm), "for svc-proxy@"+realm)
 
 	out := r.run("impersonate", "", "-keytab", proxy, "-service", "svc-proxy", "-realm", realm, "-user", "alice")
-	assert.Contains(t, out, "in the name of alice@GOOSE.TEST, forwardable: true")
+	assert.Contains(t, out, "in the name of alice@"+realm+", forwardable: true")
 	assert.Contains(t, out, "PAC user: alice")
 
 	// The whole of KCD: the back end sees alice, from the front end's call.
@@ -202,16 +206,16 @@ func TestExamples_AD(t *testing.T) {
 	})
 
 	out = r.run("kcd", "", "-keytab", proxy, "-service", "svc-proxy", "-realm", realm, "-user", "alice",
-		"-target", "HTTP/target.goose.test", "-url", "http://"+addr+"/")
+		"-target", "HTTP/target."+domain, "-url", "http://"+addr+"/")
 	assert.Contains(t, out, "200 OK")
-	assert.Contains(t, out, "hello alice@GOOSE.TEST")
-	assert.Contains(t, out, "logon domain GOOSE")
+	assert.Contains(t, out, "hello alice@"+realm)
+	assert.Regexp(t, `logon domain \w+,`, out, "the domain's NetBIOS name")
 
 	// And a user going straight to the service's own keytab, with its PAC.
 	web := filepath.Join(dir, "web.keytab")
 	addr = r.serve("spnego-server", func(a string) []string { return []string{"-keytab", web, "-addr", a} })
-	assert.Contains(t, r.run("spnego-client", stdin, "-user", "alice", "-realm", realm, "-spn", "HTTP/web.goose.test", "-url", "http://"+addr+"/"),
-		"hello alice@GOOSE.TEST")
+	assert.Contains(t, r.run("spnego-client", stdin, "-user", "alice", "-realm", realm, "-spn", "HTTP/web."+domain, "-url", "http://"+addr+"/"),
+		"hello alice@"+realm)
 
 	if ldapAddr, host := os.Getenv("TEST_AD_LDAP"), os.Getenv("TEST_AD_DC_HOST"); ldapAddr != "" && host != "" {
 		out = r.run("ldap-whoami", stdin, "-user", "alice", "-realm", realm, "-ldap", ldapAddr, "-dc", host)

@@ -24,14 +24,16 @@ func TestPAC_Claims_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
 	kt, err := keytab.Load(filepath.Join(dir, "web.keytab"))
 	require.NoError(t, err)
 
 	claims := func(user string) (uint16, map[string]string) {
-		cl := client.NewWithPassword(user, "GOOSE.TEST", password, cfg)
+		cl := client.NewWithPassword(user, realm, password, cfg)
 		require.NoError(t, cl.Login(), user)
 
-		tkt, _, err := cl.GetServiceTicket("HTTP/web.goose.test")
+		tkt, _, err := cl.GetServiceTicket("HTTP/web." + domain)
 		require.NoError(t, err)
 		require.NoError(t, tkt.DecryptEncPart(kt, nil))
 

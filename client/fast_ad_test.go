@@ -26,15 +26,17 @@ func TestClient_FAST_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
 	kt, err := keytab.Load(filepath.Join(dir, "web.keytab"))
 	require.NoError(t, err)
 
-	device := client.NewWithPassword("goosepc$", "GOOSE.TEST", password, cfg)
+	device := client.NewWithPassword("goosepc$", realm, password, cfg)
 	armor, err := device.Armor()
 	require.NoError(t, err)
 
 	rec := &recordingDialer{}
-	cl := client.NewWithPassword("alice", "GOOSE.TEST", password, cfg, client.FASTArmor(armor), client.UseDialer(rec))
+	cl := client.NewWithPassword("alice", realm, password, cfg, client.FASTArmor(armor), client.UseDialer(rec))
 	require.NoError(t, cl.Login())
 
 	for _, b := range rec.sent() {
@@ -47,7 +49,7 @@ func TestClient_FAST_AD(t *testing.T) {
 	}
 
 	// Implicit armor only: no device in the PAC.
-	tkt, _, err := cl.GetServiceTicket("HTTP/web.goose.test")
+	tkt, _, err := cl.GetServiceTicket("HTTP/web." + domain)
 	require.NoError(t, err)
 	require.NoError(t, tkt.DecryptEncPart(kt, nil))
 
@@ -57,10 +59,10 @@ func TestClient_FAST_AD(t *testing.T) {
 	assert.Nil(t, p.DeviceInfo)
 
 	// Explicit armor by the device: its info in the PAC.
-	cl = client.NewWithPassword("alice", "GOOSE.TEST", password, cfg, client.FASTArmor(armor), client.FASTDeviceArmor(armor))
+	cl = client.NewWithPassword("alice", realm, password, cfg, client.FASTArmor(armor), client.FASTDeviceArmor(armor))
 	require.NoError(t, cl.Login())
 
-	tkt, _, err = cl.GetServiceTicket("HTTP/web.goose.test")
+	tkt, _, err = cl.GetServiceTicket("HTTP/web." + domain)
 	require.NoError(t, err)
 	require.NoError(t, tkt.DecryptEncPart(kt, nil))
 
@@ -81,6 +83,6 @@ func TestClient_FAST_AD(t *testing.T) {
 	assert.True(t, compounded, "the Compounded Authentication SID")
 
 	// A wrong password, armored: AD's error from inside the armor.
-	cl = client.NewWithPassword("alice", "GOOSE.TEST", "wrong", cfg, client.FASTArmor(armor))
+	cl = client.NewWithPassword("alice", realm, "wrong", cfg, client.FASTArmor(armor))
 	require.Error(t, cl.Login())
 }

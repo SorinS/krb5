@@ -35,7 +35,9 @@ func TestAD_LDAP(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
-	cl := client.NewWithPassword("alice", "GOOSE.TEST", password, cfg)
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
+	cl := client.NewWithPassword("alice", realm, password, cfg)
 	require.NoError(t, cl.Login())
 
 	for _, layer := range []byte{gsskrb5.LayerConfidentiality, gsskrb5.LayerIntegrity, gsskrb5.LayerNone} {
@@ -51,7 +53,7 @@ func TestAD_LDAP(t *testing.T) {
 
 		base, err := c.DefaultNamingContext()
 		require.NoError(t, err)
-		assert.Equal(t, "DC=goose,DC=test", base)
+		assert.Equal(t, "DC="+strings.ReplaceAll(domain, ".", ",DC="), base)
 
 		if layer != gsskrb5.LayerConfidentiality {
 			require.NoError(t, c.Close())
@@ -62,7 +64,7 @@ func TestAD_LDAP(t *testing.T) {
 		kt, err := keytab.Load(filepath.Join(dir, "web.keytab"))
 		require.NoError(t, err)
 
-		tkt, _, err := cl.GetServiceTicket("HTTP/web.goose.test")
+		tkt, _, err := cl.GetServiceTicket("HTTP/web." + domain)
 		require.NoError(t, err)
 		require.NoError(t, tkt.DecryptEncPart(kt, nil))
 

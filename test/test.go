@@ -61,9 +61,10 @@ func Capture() bool {
 }
 
 // ADDirEnvVar names a directory with what the live AD tests need: a
-// krb5.conf for the domain GOOSE.TEST (its KDC reached on loopback, see
-// test/ad/README.md), the service's keytab web.keytab (HTTP/web.goose.test),
-// and ADPasswordFileEnvVar a file with the test users' password.
+// krb5.conf whose default_realm is the domain's realm (GOOSE.TEST in
+// test/ad/README.md, its KDC reached on loopback), the service's keytab
+// web.keytab (HTTP/web.<domain>), and ADPasswordFileEnvVar a file with the
+// test users' password.
 const (
 	ADDirEnvVar          = "TEST_AD_DIR"
 	ADPasswordFileEnvVar = "TEST_AD_PASSWORD_FILE"
@@ -88,6 +89,19 @@ func ADLive(t *testing.T) (string, string) {
 	}
 
 	return dir, strings.TrimSpace(string(b))
+}
+
+// ADDomain returns the live AD's realm, the krb5.conf's default realm given,
+// and its DNS domain, the realm in lower case, which the test accounts' SPNs
+// are under (HTTP/web.<domain>). Without a default realm the test fails.
+func ADDomain(t *testing.T, defaultRealm string) (string, string) {
+	t.Helper()
+
+	if defaultRealm == "" {
+		t.Fatal("the live AD's krb5.conf has no default_realm: it is the domain's realm")
+	}
+
+	return defaultRealm, strings.ToLower(defaultRealm)
 }
 
 // ADPeerRealmEnvVar names a second AD forest's realm, trusted both ways by

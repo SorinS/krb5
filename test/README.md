@@ -57,7 +57,9 @@ KDCs' logs.
 [test/ad/README.md](ad/README.md) takes a bare Windows Server to a DC of its
 own forest, `goose.test`, with everything the `*_AD` tests use, says which
 test needs what, and has the scripts (`test/ad/provision.sh` runs them over
-ssh). Once it is up:
+ssh). The tests take the domain from `$DIR/krb5.conf`'s `default_realm`
+(the SPNs are under the realm in lower case), so the same forest under
+another name does as well. Once it is up:
 
     test/ad/provision.sh tunnel Administrator@DC &
     INTEGRATION=1 TEST_AD_DIR=$DIR TEST_AD_PASSWORD_FILE=$DIR/users-password.txt \

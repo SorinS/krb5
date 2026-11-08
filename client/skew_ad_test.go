@@ -22,14 +22,16 @@ func TestClient_ClockSkew_AD(t *testing.T) {
 	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
 	require.NoError(t, err)
 
-	cl := client.NewWithPassword("alice", "GOOSE.TEST", password, cfg)
+	realm, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+
+	cl := client.NewWithPassword("alice", realm, password, cfg)
 	cl.SetTimeOffset(-20 * time.Minute)
 	require.NoError(t, cl.Login())
 	assert.Less(t, cl.TimeOffset().Abs(), 5*time.Second, "offset %v", cl.TimeOffset())
 
 	cl.SetTimeOffset(20 * time.Minute)
 
-	_, _, err = cl.GetServiceTicket("HTTP/web.goose.test")
+	_, _, err = cl.GetServiceTicket("HTTP/web." + domain)
 	require.NoError(t, err)
 	assert.Less(t, cl.TimeOffset().Abs(), 5*time.Second, "offset %v", cl.TimeOffset())
 }
