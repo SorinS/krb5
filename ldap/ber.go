@@ -171,8 +171,9 @@ func (r *Result) Error() string {
 
 // Result codes this package acts on.
 const (
-	ResultSuccess            = 0
-	ResultSaslBindInProgress = 14
+	ResultSuccess              = 0
+	ResultStrongerAuthRequired = 8
+	ResultSaslBindInProgress   = 14
 )
 
 func resultName(c int) string {

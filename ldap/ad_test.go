@@ -1,6 +1,7 @@
 package ldap_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -44,7 +45,19 @@ func TestAD_LDAP(t *testing.T) {
 		c, err := ldap.Dial(addr)
 		require.NoError(t, err)
 
-		require.NoError(t, c.BindGSSAPI(cl, "ldap@"+host, layer), "layer %d", layer)
+		err = c.BindGSSAPI(cl, "ldap@"+host, layer)
+
+		// A DC requiring LDAP signing (Server 2025's default) refuses the
+		// bind without integrity.
+		var res *ldap.Result
+		if layer == gsskrb5.LayerNone && errors.As(err, &res) && res.Code == ldap.ResultStrongerAuthRequired {
+			t.Log("the DC requires signing: no bind without integrity")
+			require.NoError(t, c.Close())
+
+			continue
+		}
+
+		require.NoError(t, err, "layer %d", layer)
 		assert.Equal(t, layer, c.Layer())
 
 		who, err := c.WhoAmI()
