@@ -118,10 +118,38 @@ func TestReadBytes(t *testing.T) {
 	var err error
 
 	_, err = readBytes(nil, &p, 1, &endian)
-	assert.EqualError(t, err, "'s length is greater than 1")
+	assert.EqualError(t, err, "keytab data length 0 is less than required 1")
 
 	_, err = readBytes(nil, &p, -1, &endian)
 	assert.EqualError(t, err, "-1 cannot be less than zero")
+}
+
+// A truncated keytab's errors give lengths, never the keytab's bytes: those
+// are key material, and as text they are not UTF-8 (gokrb5 #464, #583).
+func TestTruncatedKeytabErrorsOmitData(t *testing.T) {
+	t.Parallel()
+
+	full, _ := hex.DecodeString(testdata.KEYTAB_TESTUSER1_TEST_GOKRB5)
+	secret := string(full[20:36])
+
+	for _, n := range []int{5, 8, 30, len(full) - 1} {
+		err := New().Unmarshal(full[:n])
+		require.Error(t, err, "truncated to %d bytes", n)
+		assert.NotContains(t, err.Error(), secret)
+		assert.Contains(t, err.Error(), "length")
+	}
+
+	var endian binary.ByteOrder = binary.BigEndian
+
+	b := []byte{0xff}
+
+	p := 0
+	_, err := readInt16(b, &p, &endian)
+	assert.EqualError(t, err, "keytab data length 1 is less than required 2")
+	assert.Equal(t, 0, p)
+
+	_, err = readInt32(b, &p, &endian)
+	assert.EqualError(t, err, "keytab data length 1 is less than required 4")
 }
 
 func TestUnmarshalPotentialPanics(t *testing.T) {
