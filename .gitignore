@@ -29,3 +29,7 @@ _testmain.go
 coverage.txt
 .idea/
 __pycache__/
+
+# Private, never-published operator notes: live DC addresses, real domain
+# names, setup runbooks. Keep all host-specific/secret material under here.
+/private/
