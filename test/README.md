@@ -63,3 +63,12 @@ ssh). Once it is up:
     INTEGRATION=1 TEST_AD_DIR=$DIR TEST_AD_PASSWORD_FILE=$DIR/users-password.txt \
         TEST_AD_LDAP=127.0.0.1:3890 TEST_AD_DC_HOST=<the DC's host name> \
         go test -count=1 ./... -run '_AD$|TestAD_LDAP'
+
+`TestClient_S4UCrossRealm_AD` (cross-realm S4U2Self) needs a second forest,
+set up the same way, and a two-way forest trust between the two, with AES
+on the trust (`ksetup /setenctypeattr`) and each side's forest trust
+information collected (the trust's Name Suffix Routing). `TEST_AD_PEER_REALM`
+is the second forest's realm; `$DIR/krb5.conf` has the first as its
+`default_realm`, both realms' KDCs, and both domains in `[domain_realm]`.
+The service is the first forest's `svc-proxy`, so the password file is the
+first forest's; swap the two for the other direction.

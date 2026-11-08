@@ -18,31 +18,47 @@ import (
 // (TrustedToAuthForDelegation, ok_to_auth_as_delegate). The ticket is not
 // cached: GetServiceTicket's are the client's own.
 //
-// The user must be in the client's realm: the walk of referrals across
-// realms that S4U2Self needs otherwise is not done.
+// A user of another realm is asked for as Windows and MIT's client do: the
+// request goes first to the user's realm, with the client's TGT for it,
+// naming the client as an enterprise principal; that KDC answers with a
+// referral back towards the client's realm, a TGT carrying the user's PAC,
+// which TGSExchange follows with the same request. Active Directory does this
+// across a forest trust. MIT's KDC refers only host-based names, so as the
+// user's realm it cannot: it answers KDC_ERR_S_PRINCIPAL_UNKNOWN.
 func (cl *Client) GetServiceTicketForUser(user types.PrincipalName, userRealm string) (messages.Ticket, types.EncryptionKey, error) {
 	realm := cl.Credentials.Domain()
 	if userRealm == "" {
 		userRealm = realm
 	}
 
-	if userRealm != realm {
-		return messages.Ticket{}, types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError,
-			"S4U2Self for a user of another realm (%s, ours is %s) is not supported", userRealm, realm)
-	}
-
-	tgt, skey, err := cl.sessionTGT(realm)
+	tgt, skey, err := cl.sessionTGT(userRealm)
 	if err != nil {
 		return messages.Ticket{}, types.EncryptionKey{}, err
 	}
 
-	req, err := messages.NewS4U2SelfReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey,
+	cname := cl.Credentials.CName()
+
+	req, err := messages.NewS4U2SelfReqAt(cname, realm, userRealm, cl.Config, tgt, skey,
 		messages.S4UUser{Name: user, Realm: userRealm}, cl.Now())
 	if err != nil {
 		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Self TGS_REQ")
 	}
 
-	_, rep, err := cl.TGSExchange(req, realm, tgt, skey, 0)
+	// The user's realm's KDC has not got this client: it is named as an
+	// enterprise principal (client@realm) for that KDC to route by its name
+	// suffixes, as MIT does, and the request signed again.
+	if userRealm != realm {
+		req.ReqBody.SName = types.PrincipalName{
+			NameType:   nametype.KRB_NT_ENTERPRISE,
+			NameString: []string{cname.PrincipalNameString() + "@" + realm},
+		}
+
+		if err = req.SetPAData(realm, tgt, skey, cl.Now()); err != nil {
+			return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Self TGS_REQ")
+		}
+	}
+
+	_, rep, err := cl.TGSExchange(req, userRealm, tgt, skey, 0)
 	if err != nil {
 		return messages.Ticket{}, types.EncryptionKey{}, err
 	}

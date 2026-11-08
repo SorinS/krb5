@@ -9,6 +9,7 @@ import (
 	"errors"
 	"math/big"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,8 +34,15 @@ import (
 func readPAC(t *testing.T, tkt *messages.Ticket, account, password string) pac.PACType {
 	t.Helper()
 
+	return readPACIn(t, tkt, account, "GOOSE.TEST", password)
+}
+
+// readPACIn is readPAC for an account of the realm given.
+func readPACIn(t *testing.T, tkt *messages.Ticket, account, realm, password string) pac.PACType {
+	t.Helper()
+
 	kt := keytab.New()
-	require.NoError(t, kt.AddEntry(account, "GOOSE.TEST", password, time.Now(), uint8(tkt.EncPart.KVNO), tkt.EncPart.EType))
+	require.NoError(t, kt.AddEntry(account, realm, password, time.Now(), uint8(tkt.EncPart.KVNO), tkt.EncPart.EType))
 
 	name := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, account)
 	require.NoError(t, tkt.DecryptEncPart(kt, &name))
@@ -45,6 +53,54 @@ func readPAC(t *testing.T, tkt *messages.Ticket, account, password string) pac.P
 	require.NotNil(t, p.KerbValidationInfo)
 
 	return p
+}
+
+// Cross-realm S4U2Self against two live AD forests with a two-way trust: the
+// service of the default realm (svc-proxy, protocol transition) gets a
+// ticket to itself in the name of the peer realm's alice and bob, by way of
+// the peer's KDC. The ticket, read with the service's key, has the user of
+// the peer realm as its client and in its PAC. (The other direction is the
+// same test with the two realms' TEST_AD_DIR and TEST_AD_PEER_REALM swapped.)
+func TestClient_S4UCrossRealm_AD(t *testing.T) {
+	dir, password, peer := test.ADPeerRealm(t)
+
+	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
+	require.NoError(t, err)
+
+	home := cfg.LibDefaults.DefaultRealm
+	require.NotEmpty(t, home, "the krb5.conf's default_realm is the service's realm")
+
+	proxy := client.NewWithPassword("svc-proxy", home, password, cfg)
+	require.NoError(t, proxy.Login())
+
+	for _, user := range []string{"alice", "bob"} {
+		name := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, user)
+
+		self, _, err := proxy.GetServiceTicketForUser(name, peer)
+		require.NoError(t, err, "svc-proxy@%s for %s@%s", home, user, peer)
+
+		assert.Equal(t, "svc-proxy", self.SName.PrincipalNameString(), "the service's own name, not the enterprise one")
+		assert.Equal(t, home, self.Realm)
+
+		p := readPACIn(t, &self, "svc-proxy", home, password)
+		assert.Equal(t, user, self.DecryptedEncPart.CName.PrincipalNameString())
+		assert.Equal(t, peer, self.DecryptedEncPart.CRealm)
+		assert.Equal(t, user, p.ClientInfo.Name)
+	}
+
+	// A user the peer realm does not have.
+	_, _, err = proxy.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "nobody"), peer)
+
+	var kerr messages.KRBError
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	assert.Equal(t, errorcode.KDC_ERR_C_PRINCIPAL_UNKNOWN, kerr.ErrorCode)
+
+	// The service's own session is still its own: a ticket for itself in its
+	// own name, after the referrals that carried the users' PACs.
+	own, _, err := proxy.GetServiceTicket("HTTP/proxy." + strings.ToLower(home))
+	require.NoError(t, err)
+	readPACIn(t, &own, "svc-proxy", home, password)
+	assert.Equal(t, "svc-proxy", own.DecryptedEncPart.CName.PrincipalNameString())
 }
 
 // S4U against a live AD (test/ad/s4u.ps1 set up the accounts).

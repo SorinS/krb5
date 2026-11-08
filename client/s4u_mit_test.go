@@ -145,7 +145,8 @@ func TestClient_S4U_MIT(t *testing.T) {
 
 	assert.True(t, checked)
 
-	// A user the KDC does not know, and one in another realm.
+	// A user the KDC does not know, and one of a realm A.TEST has no trust
+	// with (no TGT to it to be had).
 	_, _, err = cl.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "nobody"), "A.TEST")
 	require.Error(t, err)
 
@@ -154,7 +155,48 @@ func TestClient_S4U_MIT(t *testing.T) {
 	assert.Equal(t, errorcode.KDC_ERR_C_PRINCIPAL_UNKNOWN, kerr.ErrorCode)
 
 	_, _, err = cl.GetServiceTicketForUser(alice, "K.TEST")
-	require.ErrorContains(t, err, "another realm")
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	assert.Equal(t, errorcode.KDC_ERR_S_PRINCIPAL_UNKNOWN, kerr.ErrorCode)
+}
+
+// Cross-realm S4U2Self across test/mitkdc's A.TEST <-> B.TEST trust, as MIT's
+// own client does it (s4u_creds.c): the request goes first to B.TEST, the
+// user's realm, naming the service as an enterprise principal, canonicalize
+// set. MIT's KDC refers only host-based names (is_referral_req), not an
+// enterprise one, so as the user's realm it cannot go on: it answers that it
+// has no such server. Active Directory routes the name by its forest trust and
+// does (TestClient_S4UCrossRealm_AD).
+func TestClient_S4UCrossRealm_MIT(t *testing.T) {
+	dir := test.MIT(t)
+	cfg := mitConfig(t, dir)
+
+	kt, err := keytab.Load(filepath.Join(dir, "s4u.keytab"))
+	require.NoError(t, err)
+
+	rec := &recordingDialer{}
+	cl := client.NewWithKeytab("HTTP/proxy.a.test", "A.TEST", kt, cfg, client.UseDialer(rec), client.DisablePAFXFAST(true))
+	require.NoError(t, cl.Login())
+
+	_, _, err = cl.GetServiceTicketForUser(types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "bea"), "B.TEST")
+
+	var kerr messages.KRBError
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	assert.Equal(t, errorcode.KDC_ERR_S_PRINCIPAL_UNKNOWN, kerr.ErrorCode)
+
+	var s4u []messages.TGSReq
+
+	for _, b := range rec.sent() {
+		var r messages.TGSReq
+		if b[0] == 0x6c && r.Unmarshal(b) == nil && r.PAData.Contains(patype.PA_FOR_USER) {
+			s4u = append(s4u, r)
+		}
+	}
+
+	require.Len(t, s4u, 1, "one S4U2Self request, to the user's realm")
+	assert.Equal(t, "B.TEST", s4u[0].ReqBody.Realm)
+	assert.Equal(t, int32(nametype.KRB_NT_ENTERPRISE), s4u[0].ReqBody.SName.NameType)
+	assert.Equal(t, "HTTP/proxy.a.test@A.TEST", s4u[0].ReqBody.SName.PrincipalNameString())
+	assert.True(t, types.IsFlagSet(&s4u[0].ReqBody.KDCOptions, flags.Canonicalize))
 }
 
 // S4U2Self by certificate: MIT's DB2 back end cannot map one. That the KDC gets

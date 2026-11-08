@@ -29,6 +29,15 @@ func (cl *Client) newTGSReqLike(tgsReq messages.TGSReq, kdcRealm string, tgt mes
 	// S4U: the same request, signed again.
 	if tgsReq.S4UUser != nil || tgsReq.IsS4U2Proxy() {
 		tgsReq.ReqBody.Realm = kdcRealm
+
+		// Back in the client's realm, a cross-realm S4U2Self asks for the
+		// client by its own name again, not the enterprise name its user's
+		// realm needed (as Windows and MIT do).
+		if tgsReq.S4UUser != nil && kdcRealm == cl.Credentials.Domain() &&
+			tgsReq.ReqBody.SName.NameType == nametype.KRB_NT_ENTERPRISE {
+			tgsReq.ReqBody.SName = cl.Credentials.CName()
+		}
+
 		err := tgsReq.SetPAData(cl.Credentials.Domain(), tgt, sessionKey, cl.Now())
 
 		return tgsReq, err
@@ -141,17 +150,29 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		return tgsReq, tgsRep, krberror.Errorf(err, krberror.EncodingError, "TGS Exchange Error: TGS_REP is not valid")
 	}
 
-	if err := tgsRep.VerifyS4U(tgsReq); err != nil {
-		return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: S4U")
+	referred := len(tgsRep.Ticket.SName.NameString) > 0 && tgsRep.Ticket.SName.NameString[0] == "krbtgt" &&
+		!tgsRep.Ticket.SName.Equal(tgsReq.ReqBody.SName)
+
+	// A referral on the way to an S4U2Self ticket is the client's, with the
+	// user's PAC: only the final reply names the user.
+	if !referred {
+		if err := tgsRep.VerifyS4U(tgsReq); err != nil {
+			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: S4U")
+		}
 	}
 
-	if len(tgsRep.Ticket.SName.NameString) > 0 && tgsRep.Ticket.SName.NameString[0] == "krbtgt" && !tgsRep.Ticket.SName.Equal(tgsReq.ReqBody.SName) {
+	if referred {
 		if referral > 5 {
 			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: maximum number of referrals exceeded")
 		}
 		// Server referral https://tools.ietf.org/html/rfc6806.html#section-8
 		// The TGS Rep contains a TGT for another domain as the service resides in that domain.
-		cl.addSession(tgsRep.Ticket, tgsRep.DecryptedEncPart)
+		// An S4U referral is not the client's own TGT (a cross-realm S4U2Self's
+		// carries the user's PAC, back to the client's realm): it must not
+		// replace the client's session for that realm.
+		if tgsReq.S4UUser == nil && !tgsReq.IsS4U2Proxy() {
+			cl.addSession(tgsRep.Ticket, tgsRep.DecryptedEncPart)
+		}
 		realm := tgsRep.Ticket.SName.NameString[len(tgsRep.Ticket.SName.NameString)-1]
 		referral++
 

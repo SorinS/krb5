@@ -90,6 +90,26 @@ func ADLive(t *testing.T) (string, string) {
 	return dir, strings.TrimSpace(string(b))
 }
 
+// ADPeerRealmEnvVar names a second AD forest's realm, trusted both ways by
+// the one TEST_AD_DIR's krb5.conf has as its default realm (that krb5.conf
+// lists both realms and maps both domains), with its own alice and bob.
+const ADPeerRealmEnvVar = "TEST_AD_PEER_REALM"
+
+// ADPeerRealm skips the test unless ADLive would not and TEST_AD_PEER_REALM
+// is set; it returns the directory, the users' password and the peer realm.
+func ADPeerRealm(t *testing.T) (string, string, string) {
+	t.Helper()
+
+	dir, password := ADLive(t)
+
+	peer := os.Getenv(ADPeerRealmEnvVar)
+	if peer == "" {
+		t.Skip("Skipping cross-realm AD test: " + ADPeerRealmEnvVar + " is not set (see test/ad/README.md)")
+	}
+
+	return dir, password, peer
+}
+
 // MITBin returns the directory of MIT's tools (kinit, klist, kvno) that
 // test/mitkdc/mitkdc.py found, skipping the test without it.
 func MITBin(t *testing.T) string {
