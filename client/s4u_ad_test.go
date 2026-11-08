@@ -94,6 +94,79 @@ func TestClient_S4UCrossRealm_AD(t *testing.T) {
 	assert.Equal(t, "svc-proxy", own.DecryptedEncPart.CName.PrincipalNameString())
 }
 
+// Cross-realm S4U2Proxy against two live AD forests with a two-way trust
+// (test/ad/xrealm-s4u.ps1): the default realm's svc-proxy delegates its
+// S4U2Self ticket for alice to the peer realm's svc-xtarget, which lets it
+// (resource-based: across a forest trust, the only delegation there is), by
+// way of the proxy TGT its own KDC answers with; and the peer realm's bob,
+// from cross-realm S4U2Self, to its own realm's svc-target.
+func TestClient_S4UProxyCrossRealm_AD(t *testing.T) {
+	dir, password, peer := test.ADPeerRealm(t)
+	peerPassword := test.ADPeerPassword(t)
+
+	cfg, err := config.Load(filepath.Join(dir, "krb5.conf"))
+	require.NoError(t, err)
+
+	cfg.LibDefaults.Forwardable = true
+	home, domain := test.ADDomain(t, cfg.LibDefaults.DefaultRealm)
+	_, peerDomain := test.ADDomain(t, peer)
+
+	proxy := client.NewWithPassword("svc-proxy", home, password, cfg)
+	require.NoError(t, proxy.Login())
+
+	alice := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "alice")
+	bob := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, "bob")
+	xtarget := "HTTP/xtarget." + peerDomain
+
+	self, _, err := proxy.GetServiceTicketForUser(alice, home)
+	require.NoError(t, err)
+
+	target, skey, err := proxy.GetServiceTicketForProxy(xtarget, self)
+	require.NoError(t, err)
+	require.NotEmpty(t, skey.KeyValue)
+	assert.Equal(t, peer, target.Realm)
+	assert.Equal(t, xtarget, target.SName.PrincipalNameString())
+
+	p := readPAC(t, &target, "svc-xtarget", peerPassword)
+	assert.Equal(t, "alice", target.DecryptedEncPart.CName.PrincipalNameString())
+	assert.Equal(t, home, target.DecryptedEncPart.CRealm)
+	assert.Equal(t, "alice", p.ClientInfo.Name)
+	require.NotNil(t, p.S4UDelegationInfo)
+	assert.Equal(t, xtarget, p.S4UDelegationInfo.S4U2proxyTarget.Value)
+	require.Len(t, p.S4UDelegationInfo.S4UTransitedServices, 1)
+	assert.Equal(t, "svc-proxy@"+home, p.S4UDelegationInfo.S4UTransitedServices[0].Value)
+
+	// A user of the peer realm to a target of the service's own: no proxy
+	// TGT, the service's KDC answers.
+	peerBob, _, err := proxy.GetServiceTicketForUser(bob, peer)
+	require.NoError(t, err)
+
+	back, _, err := proxy.GetServiceTicketForProxy("HTTP/target."+domain, peerBob)
+	require.NoError(t, err)
+	assert.Equal(t, home, back.Realm)
+
+	p = readPAC(t, &back, "svc-target", password)
+	assert.Equal(t, "bob", back.DecryptedEncPart.CName.PrincipalNameString())
+	assert.Equal(t, peer, back.DecryptedEncPart.CRealm)
+	assert.Equal(t, "bob", p.ClientInfo.Name)
+
+	// The peer's user to the peer's target, through this realm: the proxy
+	// TGT carries the peer's own user back over the trust, and the peer's
+	// KDC refuses it (its SID filtering drops its own forest's SIDs coming
+	// in from another, MS-PAC 4.1.2.2).
+	_, _, err = proxy.GetServiceTicketForProxy(xtarget, peerBob)
+
+	var kerr messages.KRBError
+	require.True(t, errors.As(err, &kerr), "%v", err)
+	assert.Equal(t, errorcode.KDC_ERR_POLICY, kerr.ErrorCode)
+
+	// The service's own TGT for the peer realm is still its own.
+	own, _, err := proxy.GetServiceTicket(xtarget)
+	require.NoError(t, err)
+	readPAC(t, &own, "svc-xtarget", peerPassword)
+	assert.Equal(t, "svc-proxy", own.DecryptedEncPart.CName.PrincipalNameString())
+}
+
 // S4U against a live AD (test/ad/s4u.ps1 set up the accounts).
 func TestClient_S4U_AD(t *testing.T) {
 	dir, password := test.ADLive(t)

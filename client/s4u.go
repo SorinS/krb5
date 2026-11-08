@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 
 	"github.com/SorinS/krb5/iana/nametype"
+	"github.com/SorinS/krb5/iana/patype"
 	"github.com/SorinS/krb5/krberror"
 	"github.com/SorinS/krb5/messages"
 	"github.com/SorinS/krb5/types"
@@ -114,24 +115,65 @@ func (cl *Client) GetServiceTicketForCertificate(cert *x509.Certificate) (messag
 // service (which then wants evidence forwardable), or
 // msDS-AllowedToActOnBehalfOfOtherIdentity on the target (resource-based);
 // MIT's DB2 back end refuses it. The ticket is not cached.
+//
+// A target in another realm is asked for as MS-SFU 3.1.5.2.2 has it, and
+// MIT's client does: the client's KDC answers with a proxy TGT, a referral
+// to the target's realm in the user's name; the request goes on to that
+// realm with the client's own TGT for it and the proxy TGT as the evidence.
+// Across an AD forest trust only resource-based delegation does this.
 func (cl *Client) GetServiceTicketForProxy(spn string, evidence messages.Ticket) (messages.Ticket, types.EncryptionKey, error) {
 	realm := cl.Credentials.Domain()
 	sname := types.NewPrincipalName(nametype.KRB_NT_PRINCIPAL, spn)
+	kdcRealm := realm
 
-	tgt, skey, err := cl.sessionTGT(realm)
-	if err != nil {
-		return messages.Ticket{}, types.EncryptionKey{}, err
+	for hops := 0; ; hops++ {
+		tgt, skey, err := cl.sessionTGT(kdcRealm)
+		if err != nil {
+			return messages.Ticket{}, types.EncryptionKey{}, err
+		}
+
+		req, err := messages.NewS4U2ProxyReqAt(cl.Credentials.CName(), realm, kdcRealm, cl.Config, tgt, skey, sname, evidence, cl.Now())
+		if err != nil {
+			return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Proxy TGS_REQ")
+		}
+
+		_, rep, err := cl.TGSExchange(req, kdcRealm, tgt, skey, 0)
+		if err != nil {
+			return messages.Ticket{}, types.EncryptionKey{}, err
+		}
+
+		names := rep.Ticket.SName.NameString
+		if len(names) != 2 || names[0] != "krbtgt" || sname.Equal(rep.Ticket.SName) {
+			return rep.Ticket, rep.DecryptedEncPart.Key, nil
+		}
+
+		// A proxy TGT, from a KDC that did resource-based delegation (else
+		// it may be an ordinary referral, the client's, of no use here).
+		next := names[1]
+		if hops == 5 || next == kdcRealm || !rbcdDone(rep) {
+			return messages.Ticket{}, types.EncryptionKey{}, krberror.NewErrorf(krberror.KRBMsgError,
+				"S4U2Proxy: %s's KDC answered with %s, not a proxy TGT", kdcRealm, rep.Ticket.SName.PrincipalNameString())
+		}
+
+		cl.Log("S4U2Proxy: a proxy TGT from %s to %s", kdcRealm, next)
+		evidence, kdcRealm = rep.Ticket, next
+	}
+}
+
+// rbcdDone is whether a TGS reply says the KDC did resource-based
+// constrained delegation (its PA-PAC-OPTIONS, in the encrypted part), as
+// MIT's client checks of a proxy TGT.
+func rbcdDone(rep messages.TGSRep) bool {
+	for _, pa := range rep.DecryptedEncPart.EncPAData {
+		if pa.PADataType != patype.PA_PAC_OPTIONS {
+			continue
+		}
+
+		var o types.PAPACOptions
+		if o.Unmarshal(pa.PADataValue) == nil && types.IsFlagSet(&o.Options, types.PACOptionResourceBasedConstrained) {
+			return true
+		}
 	}
 
-	req, err := messages.NewS4U2ProxyReqAt(cl.Credentials.CName(), realm, realm, cl.Config, tgt, skey, sname, evidence, cl.Now())
-	if err != nil {
-		return messages.Ticket{}, types.EncryptionKey{}, krberror.Errorf(err, krberror.KRBMsgError, "failed to generate the S4U2Proxy TGS_REQ")
-	}
-
-	_, rep, err := cl.TGSExchange(req, realm, tgt, skey, 0)
-	if err != nil {
-		return messages.Ticket{}, types.EncryptionKey{}, err
-	}
-
-	return rep.Ticket, rep.DecryptedEncPart.Key, nil
+	return false
 }

@@ -62,8 +62,15 @@ cgo).
   transition, Kerberos-only delegation, resource-based, a target not
   allowed, a sensitive user; the target decrypts the ticket and reads
   alice's PAC and the delegation info) and MIT 1.22 (S4U2Self, PA-FOR-USER
-  alone; its DB2 back end refuses S4U2Proxy). Not done: S4U2Self for a user
-  of another realm.
+  alone; its DB2 back end refuses S4U2Proxy).
+- **Cross-realm S4U:** S4U2Self for a user of another realm (the request goes
+  to the user's realm first, naming the service as an enterprise principal,
+  and follows the referral back, as Windows and MIT's client do), and
+  S4U2Proxy to a target of another realm (MS-SFU 3.1.5.2.2: the proxy TGT the
+  service's KDC answers with is the evidence for the target's realm, asked
+  with the service's own TGT there). Neither referral is cached as the
+  service's own. Tested both ways across two live AD forests with a two-way
+  trust (resource-based delegation, the only kind across a trust).
 - **S4U2Self by certificate:** `Client.GetServiceTicketForCertificate`: the
   KDC finds the user, the reply's checksummed echo says who it is (required
   here). RSA certificates tested, on the live AD with `altSecurityIdentities`

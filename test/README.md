@@ -74,3 +74,7 @@ is the second forest's realm; `$DIR/krb5.conf` has the first as its
 `default_realm`, both realms' KDCs, and both domains in `[domain_realm]`.
 The service is the first forest's `svc-proxy`, so the password file is the
 first forest's; swap the two for the other direction.
+`TestClient_S4UProxyCrossRealm_AD` (cross-realm S4U2Proxy) needs
+`test/ad/xrealm-s4u.ps1` run on both forests, and
+`TEST_AD_PEER_PASSWORD_FILE`, the second forest's users' password, to read
+the tickets to its `svc-xtarget`.

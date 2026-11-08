@@ -124,6 +124,28 @@ func ADPeerRealm(t *testing.T) (string, string, string) {
 	return dir, password, peer
 }
 
+// ADPeerPasswordFileEnvVar names a file with the peer realm's test users'
+// password, for the tests that read tickets to the peer's services.
+const ADPeerPasswordFileEnvVar = "TEST_AD_PEER_PASSWORD_FILE"
+
+// ADPeerPassword skips the test unless TEST_AD_PEER_PASSWORD_FILE is set; it
+// returns the peer realm's users' password.
+func ADPeerPassword(t *testing.T) string {
+	t.Helper()
+
+	pwFile := os.Getenv(ADPeerPasswordFileEnvVar)
+	if pwFile == "" {
+		t.Skip("Skipping: " + ADPeerPasswordFileEnvVar + " is not set (see test/README.md)")
+	}
+
+	b, err := os.ReadFile(pwFile)
+	if err != nil {
+		t.Fatalf("reading the peer AD password file: %v", err)
+	}
+
+	return strings.TrimSpace(string(b))
+}
+
 // MITBin returns the directory of MIT's tools (kinit, klist, kvno) that
 // test/mitkdc/mitkdc.py found, skipping the test without it.
 func MITBin(t *testing.T) string {

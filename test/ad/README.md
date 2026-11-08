@@ -89,6 +89,10 @@ disaster recovery. `users-password.txt` is every test account's.
    `C:\Goose\dc\promote.log`.
 4. **`setup.ps1`**: see below. It restarts the KDC, for the claims policy.
 5. **`claims.ps1`**, **`s4u.ps1`**: see below.
+   For the cross-realm tests, with a second forest and a two-way trust
+   (test/README.md), **`xrealm-s4u.ps1 -ProxySID <the other forest's
+   svc-proxy's SID>`** on each (not part of `provision.sh`; copy the users'
+   password to `C:\Goose\dc\users.txt` first, as `provision.sh` does).
 6. **`xpress.ps1`** (not part of `provision.sh`; run it only to regenerate
    vectors): Windows' own compressor over many inputs:
 
@@ -172,6 +176,8 @@ GPO would set them).
 | Resource-based delegation, allowed and not | the same | svc-rbcd, svc-rbcdt, svc-target |
 | S4U armored with FAST | the same | svc-proxy |
 | S4U2Self by certificate, on to S4U2Proxy, armored; a certificate mapped to nobody; no protocol transition: not forwardable | `client`: `TestClient_S4UCert_AD` | certie, svc-proxy, svc-target, svc-kerb |
+| Cross-realm S4U2Self: the peer forest's users, their PAC; a user it has not | `client`: `TestClient_S4UCrossRealm_AD`, needing `TEST_AD_PEER_REALM` | svc-proxy, the peer's alice and bob |
+| Cross-realm S4U2Proxy: to the peer's target by a proxy TGT, the delegation info; the peer's user to a target here; the peer's user back to the peer refused | `client`: `TestClient_S4UProxyCrossRealm_AD`, needing `TEST_AD_PEER_PASSWORD_FILE` too | svc-proxy, svc-target, the peer's svc-xtarget and bob |
 | LDAP with SASL GSSAPI at each protection level, Who am I, SID lookups, tokenGroups against the PAC's groups | `ldap`: `TestAD_LDAP`, needing `TEST_AD_LDAP`, `TEST_AD_DC_HOST` | alice, GooseTesters, `web.keytab` |
 
 S4U2Self by certificate needs no CA on the DC. The test makes its certificates

@@ -161,6 +161,12 @@ func (cl *Client) TGSExchange(tgsReq messages.TGSReq, kdcRealm string, tgt messa
 		}
 	}
 
+	// A referral to S4U2Proxy is a proxy TGT, in the user's name, to the
+	// target's realm: the caller's to use as the next request's evidence.
+	if referred && tgsReq.IsS4U2Proxy() {
+		return tgsReq, tgsRep, nil
+	}
+
 	if referred {
 		if referral > 5 {
 			return tgsReq, tgsRep, krberror.Errorf(err, krberror.KRBMsgError, "TGS Exchange Error: maximum number of referrals exceeded")
