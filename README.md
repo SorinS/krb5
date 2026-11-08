@@ -40,6 +40,8 @@ this is his org, and we're just the current stewards.
     (S4U2Proxy: constrained and resource-based delegation)
   * PKINIT (package `pkinit`): a TGT from an X.509 certificate (`NewWithPKINIT`), or anonymously (`NewAnonymous`, whose
     TGT can armor FAST)
+  * KKDCP (MS-KKDCP): Kerberos over HTTPS when a KDC is written as an `https://` URL (a KDC proxy); AS and TGS
+    exchanges are wrapped in a KDC-PROXY-MESSAGE and POSTed, with the realm's `http_anchors` trusting the proxy's CA
 * GSS-API (package `gsskrb5`)
   * The Kerberos V5 mechanism on its own (RFC 4121): initiator and acceptor contexts, mutual authentication, channel
     bindings, credential delegation (a forwarded TGT), MIC and Wrap tokens with sequence checks; tested against MIT's
@@ -55,10 +57,14 @@ this is his org, and we're just the current stewards.
   * Kerberos libraries for custom integration
   * Parsing Keytab files
   * Parsing krb5.conf files (as MIT reads them: includes, one-line realms, enctype families)
+  * Locating KDCs from the realm over DNS SRV records (`dns_lookup_kdc`, on by default as in MIT), so a client works
+    with no krb5.conf at all
   * Reading and writing credentials cache files such as `/tmp/krb5cc_$(id -u $(whoami))` (MIT's FILE format, which
     MIT's and Heimdal's tools read), with the KDC time offset
   * The client's clock corrected by the KDC's (kdc_timesync), as MIT does
   * Camellia in constant time
+  * Hardened message parsing: malformed KDC, peer, PAC or kpasswd bytes (and nil or edge API arguments) return an
+    error or a safe no-op instead of panicking, audited across every package
 
 ## Support
 
